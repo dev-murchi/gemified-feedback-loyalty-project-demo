@@ -8,12 +8,14 @@ Bu doküman, kodun nasıl yazılacağını tanımlar: Clean Architecture katmanl
 
 | Alan | Değer |
 | --- | --- |
-| Sürüm | 1.4 |
+| Sürüm | 1.6 |
 | Dayandığı dokümanlar | SDD v1.1, Alan Modeli v1.0, Test Stratejisi v1.3 |
 | Değişiklik (1.1) | Test aracı Jest yerine Vitest: NestJS 12 yalnızca ESM; Vitest ESM'i doğal olarak destekler; dependency-cruiser'a `shared-kernel-is-pure` kuralı eklendi (shared kernel'i her domain dolaylı olarak içe aktarır) |
 | Değişiklik (1.2) | `shared-kernel/adapters/` (paylaşılan bellek içi UnitOfWork ve sistem saati) ve `test/support/` (FakeClock) eklendi; dependency-cruiser'a `core-does-not-use-shared-adapters` kuralı eklendi |
 | Değişiklik (1.3) | Olay erişim anahtarı (`takeEvents`, `src/shared-kernel/repository-access.ts`) ve `repository-access-only-in-outbound-adapters` kuralı; `InMemoryTable` satırları kopyalar; save sonrası sürüm kuralı (markSaved; uygulama S0-04) |
 | Değişiklik (1.4) | Klasör yapısı: domain aggregate'e göre alt klasörlere ayrılır; application'da `use-cases/` klasörü |
+| Değişiklik (1.5) | Sürüm 0 kuralı (hiç saklanmamış aggregate; satır yoksa insert); `adapters/inbound/demo/` klasörü ve `demo-data-only-from-composition` kuralı |
+| Değişiklik (1.6) | Çakışma hata olarak fırlatılır (`ConcurrencyConflictError`) ve unit of work'ü geri alır; kararlar ilk save'den önce verilir; unit of work içinde hatalar genel try/catch ile yutulmaz |
 | Kapsam | `src/` ve `test/` altındaki tüm kod |
 
 **Temel hedefler:**
@@ -51,6 +53,7 @@ src/
       use-cases/           # her use case ve open host service uygulaması kendi dosyasında
     adapters/
       inbound/             # http, kuyruk tüketicisi, zamanlanmış iş
+        demo/              # yalnızca demo verisi; yalnızca composition kullanır, üretimde yüklenmez
       outbound/            # postgres, memory, redis, llm, attestation, crypto
     public/                # yayınlanan olaylar ve open host service arayüzleri
   catalog/ feedback/ analysis/ gamification/ insights/   # aynı yapı
@@ -89,7 +92,7 @@ prompts/                   # sürümlü LLM prompt'ları
 
 **Domain servisleri:** Yalnızca tek bir entity'ye ait olmayan kurallar için kullanılır (`PiiMasker`, `LevelPolicy`, `RetryPolicy`). Durum tutmazlar.
 
-**Repository'ler:** Aggregate başına bir repository vardır. Arayüzü application katmanındaki `ports` klasöründedir ve domain nesneleri alıp döner. `save` iyimser kilitle yazar; sürüm uyuşmazsa `ConcurrencyConflict` döner. Bellek içi repository'ler satırları `InMemoryTable` ile saklar; tablo satırları kopyalayarak yazar ve döndürür (`structuredClone`). Satırlar düz veridir (sınıf örneği veya fonksiyon içermez). Bu kural repository sözleşme testleriyle doğrulanır. Başarılı bir `save` sonrasında repository, bellekteki aggregate nesnesinin sürümünü saklanan sürüme eşitler (`aggregate[markSaved](version)`). Unit of work geri alınırsa nesne atılır ve yeniden yüklenir (ADR-019).
+**Repository'ler:** Aggregate başına bir repository vardır. Arayüzü application katmanındaki `ports` klasöründedir ve domain nesneleri alıp döner. `save` iyimser kilitle yazar; sürüm uyuşmazsa `ConcurrencyConflictError` fırlatır ve unit of work geri alınır. Bellek içi repository'ler satırları `InMemoryTable` ile saklar; tablo satırları kopyalayarak yazar ve döndürür (`structuredClone`). Satırlar düz veridir (sınıf örneği veya fonksiyon içermez). Bu kural repository sözleşme testleriyle doğrulanır. Başarılı bir `save` sonrasında repository, bellekteki aggregate nesnesinin sürümünü saklanan sürüme eşitler (`aggregate[markSaved](version)`). Unit of work geri alınırsa nesne atılır ve yeniden yüklenir (ADR-019). Hiç saklanmamış bir aggregate'in sürümü 0'dır (yeni oluşturulmuş veya snapshot'tan geri yüklenmiş). Sürümü 0 olan aggregate kaydedilirken satır yoksa ekleme (insert) yapılır; satır varsa `ConcurrencyConflictError` fırlatır.
 
 **Anemik modele izin verilmez:** Use case'ler akışı yönetir (yükle, aggregate metodunu çağır, kaydet); iş kararı vermez. Use case içinde bir aggregate'in alanına bakarak `if` yazılıyorsa, o kural aggregate'e taşınmalıdır.
 
@@ -99,7 +102,8 @@ prompts/                   # sürümlü LLM prompt'ları
 - Bağımlılıklar tek bir `deps` nesnesiyle alınır; böylece kurucu parametre sayısı sınırı (Bölüm 8) korunur ve bağımlılıklar adlarıyla okunur.
 - Komut ve sonuç tipleri düz verilerdir; framework tipi taşımaz.
 - Transaction `UnitOfWork.run(...)` ile açılır. **Dış servis çağrıları (LLM, Apple/Google) transaction içinde yapılmaz.**
-- `ConcurrencyConflict` alan use case aggregate'i yeniden yükleyip işlemi bir kez tekrarlar; ikinci çakışmada hatayı yukarı iletir.
+- Çakışmada use case, yükleme dahil tüm unit of work'ü bir kez tekrarlar (`retryOnConflict`, `uow.run`'ın dışında; yalnızca `ConcurrencyConflictError` yakalanır). İkinci çakışma da fırlatılır ve API'de `INTERNAL_ERROR` (500, tekrar denenebilir) olur; Idempotency-Key tekrar denemeyi güvenli kılar.
+- **Unit of work içinde tüm iş kararları ilk `save`'den önce verilir.** Bir `save`'den sonra dönen iş hatası (`Err`) unit of work'ü geri almaz ve önceki kayıtlar kalıcı olur. Her ret senaryosu için "reddedilen istek hiçbir şey saklamaz" testi yazılır (ör. S0-07: reddedilen yorum gönderimi hiçbir şey saklamaz).
 
 ```ts
 export class SubmitFeedback {
@@ -117,7 +121,7 @@ export class SubmitFeedback {
 | Durum | Nasıl ifade edilir | Örnek |
 | --- | --- | --- |
 | Beklenen iş sonucu | `Result` ile döner, fırlatılmaz | `RewardCooldown`, `QrInvalid`, `TextTooLong` |
-| Eşzamanlılık çakışması | `ConcurrencyConflict` sonucu; use case bir kez yeniden dener | İki eşzamanlı yorum |
+| Eşzamanlılık çakışması | `ConcurrencyConflictError` fırlatılır ve unit of work geri alınır; use case bir kez yeniden dener; ikinci çakışma `500 INTERNAL_ERROR` olur | İki eşzamanlı yorum |
 | Altyapı hatası | Fırlatılır; inbound adapter `500 INTERNAL_ERROR` döner ve loglar | Veritabanı bağlantısı koptu |
 | Programlama hatası | Fırlatılır | Beklenmeyen durum |
 
@@ -125,6 +129,8 @@ export class SubmitFeedback {
 - Hata kodundan HTTP durumuna eşleme tek bir tabloda, HTTP adapter'ındadır. Bu tablonun sözleşmedeki katalogla aynı olduğu bir testle doğrulanır.
 - Biçim doğrulaması (eksik alan, yanlış tip) inbound adapter'da yapılır ve `VALIDATION_ERROR` döner. Anlam doğrulaması (metin uzunluğu, QR geçerliliği) değer nesnelerinde ve aggregate'lerde yapılır ve kendi kodunu döner.
 - `null` bir hatayı ifade etmek için kullanılmaz.
+- Eşzamanlılık çakışması bir domain hatası değildir ve hiçbir `Result` tipinde yer almaz; API hata kataloğu değişmez.
+- Unit of work içinde (use case işi veya senkron olay işleyicisi) hatalar genel bir try/catch ile yutulmaz; yakalanan bir `ConcurrencyConflictError` unit of work'ün commit edilmesine yol açar.
 
 ## 7. Cyclomatic Complexity ve Cohesion
 
@@ -200,6 +206,9 @@ forbidden: [
   { name: 'repository-access-only-in-outbound-adapters', severity: 'error',
     from: { pathNot: ['^src/shared-kernel/aggregate-root\\.ts$', '^src/[^/]+/adapters/outbound/', '^src/shared-kernel/adapters/'] },
     to: { path: '^src/shared-kernel/repository-access\\.ts$' } },
+  { name: 'demo-data-only-from-composition', severity: 'error',
+    from: { pathNot: ['^src/composition/', '^src/[^/]+/adapters/inbound/demo/'] },
+    to: { path: '^src/[^/]+/adapters/inbound/demo/' } },
 ]
 ```
 

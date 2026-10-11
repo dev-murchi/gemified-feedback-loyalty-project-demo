@@ -29,7 +29,8 @@
     "test:integration": "vitest run --project integration",
     "test:e2e": "vitest run --project e2e",
     "test:cov": "vitest run --project unit --project contract --coverage",
-    "verify": "npm run typecheck && npm run lint && npm run format:check && npm run depcruise && npm run contract:lint && npm run test:cov && npm run test:e2e"
+    "verify": "npm run typecheck && npm run lint && npm run format:check && npm run depcruise && npm run contract:lint && npm run test:cov && npm run test:e2e",
+    "demo:snapshot": "tsx scripts/generate-demo-catalog.ts"
   },
   "dependencies": {
     "@nestjs/common": "^12.0.1",
@@ -54,6 +55,7 @@
     "prettier": "^3.4.2",
     "source-map-support": "^0.5.21",
     "supertest": "^7.0.0",
+    "tsx": "4.23.15",
     "typescript": "~6.0.2",
     "typescript-eslint": "^8.71.1",
     "vitest": "^5.0.3"

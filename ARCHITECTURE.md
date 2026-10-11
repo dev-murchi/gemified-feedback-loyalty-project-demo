@@ -23,6 +23,7 @@ npm ci
 cp .env.example .env     # read by docker compose
 docker compose up -d     # PostgreSQL and Redis (not used by the app yet)
 npm run start:dev        # API with watch mode, http://localhost:3000
+DEMO_DATA=true npm run start:dev   # same, with the public demo catalog loaded
 npm run verify           # every quality gate, same as CI
 ```
 
@@ -34,19 +35,20 @@ npm run contract:mock:check   # calls all 12 endpoints, expects a documented suc
 docker compose --profile mock down
 ```
 
-| Script                                                               | What it does                                                           |
-| -------------------------------------------------------------------- | ---------------------------------------------------------------------- |
-| `start:dev` / `start` / `start:debug`                                | Run the API through the NestJS CLI                                     |
-| `build`, `start:prod`                                                | Compile to `dist/` with `nest build`, run `dist/main.api.js`           |
-| `typecheck`                                                          | `tsc --noEmit`                                                         |
-| `lint`                                                               | ESLint with the rules below                                            |
-| `format`, `format:check`                                             | Prettier (ignores `docs/` and `CLAUDE.md`)                             |
-| `depcruise`                                                          | Layer and context rules with dependency-cruiser                        |
-| `contract:lint`                                                      | Redocly CLI lint of `docs/api/openapi.yaml`                            |
-| `contract:mock:check`                                                | Smoke check of the Prism mock (`scripts/check-mock.ts`)                |
-| `test`, `test:unit`, `test:contract`, `test:integration`, `test:e2e` | Vitest projects                                                        |
-| `test:cov`                                                           | Unit and contract tests with the coverage gate                         |
-| `verify`                                                             | typecheck, lint, format check, depcruise, contract lint, coverage, e2e |
+| Script                                                               | What it does                                                                            |
+| -------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| `start:dev` / `start` / `start:debug`                                | Run the API through the NestJS CLI                                                      |
+| `build`, `start:prod`                                                | Compile to `dist/` with `nest build`, run `dist/main.api.js`                            |
+| `typecheck`                                                          | `tsc --noEmit`                                                                          |
+| `lint`                                                               | ESLint with the rules below                                                             |
+| `format`, `format:check`                                             | Prettier (ignores `docs/` and `CLAUDE.md`)                                              |
+| `depcruise`                                                          | Layer and context rules with dependency-cruiser                                         |
+| `contract:lint`                                                      | Redocly CLI lint of `docs/api/openapi.yaml`                                             |
+| `contract:mock:check`                                                | Smoke check of the Prism mock (`scripts/check-mock.ts`)                                 |
+| `test`, `test:unit`, `test:contract`, `test:integration`, `test:e2e` | Vitest projects                                                                         |
+| `test:cov`                                                           | Unit and contract tests with the coverage gate                                          |
+| `verify`                                                             | typecheck, lint, format check, depcruise, contract lint, coverage, e2e                  |
+| `demo:snapshot`                                                      | Completes the demo catalog snapshot (ids, QR tokens) with `tsx`; keeps existing entries |
 
 ## Layout
 
@@ -57,13 +59,26 @@ src/
   main.api.ts              # API entry point
   composition/
     app.module.ts          # composition root (NestJS)
-  shared-kernel/           # Result, typed ids, Clock, IdGenerator, DomainEvent, DomainError,
-                           # ConcurrencyConflict, AggregateRoot, UnitOfWork, event routing, outbox record
-    adapters/              # InMemoryTable, InMemoryUnitOfWork, SystemClock, RandomIdGenerator
+    persistence.module.ts  # shared in-memory store and unit of work
+    catalog.module.ts      # Catalog wiring; demo data only with DEMO_DATA=true
+  shared-kernel/           # Result, typed ids, Clock, IdGenerator, RandomSource, DomainEvent, DomainError,
+                           # ConcurrencyConflictError, AggregateRoot, UnitOfWork, event routing, outbox record,
+                           # repository-access keys, retryOnConflict
+    adapters/              # InMemoryTable, InMemoryUnitOfWork, saveVersioned, SystemClock,
+                           # RandomIdGenerator, CryptoRandomSource
+  catalog/
+    domain/                # sector, geo-point, topic-key; brand/, branch/ (QrCode, QrToken), label-set/
+    application/           # ports/ (repositories), use-cases/ (ResolveQr, ProvideLabelSet, RevokeQrCode)
+    adapters/
+      inbound/demo/        # demo catalog definition, generated snapshot, loader
+      outbound/            # memory-*.repository.ts
+    public/                # QrResolver, LabelSetProvider, CatalogSector
+scripts/                   # check-mock.ts, generate-demo-catalog.ts
 test/
-  support/                 # FakeClock, SequentialIdGenerator
-  unit/shared-kernel/
-  e2e/                     # HTTP-level tests
+  support/                 # fakes, builders, in-memory harnesses
+  unit/                    # shared-kernel/, catalog/, composition/
+  contract/                # support/ (generic contracts), catalog/
+  e2e/                     # application-level tests
 ```
 
 Target (`docs/07` §3). Each context's folders are created when that context is built, one module at a time:
@@ -97,24 +112,34 @@ How a state change and its consequences end up in one transaction (ADR-014, ADR-
 4. When the work finishes, each event is looked up in the routing table built in `composition/`: synchronous handlers run inside the same transaction; outbox-routed events (`FeedbackSubmitted`) become outbox records. An event without a route fails the transaction.
 5. If anything throws, every change is undone, outbox included.
 
+**Conflicts and decisions.** `save` throws `ConcurrencyConflictError` on a stale version, which rolls back the whole unit of work. Use cases wrap the complete `uow.run(...)`, load included, in `retryOnConflict`; it reruns once and rethrows a second conflict (at the API: `500 INTERNAL_ERROR`, retryable). A returned `Err` does not roll back, so every decision comes before the first save, and errors inside a unit of work are never swallowed by a general `try/catch` (`docs/07` §5–6).
+
 `InMemoryUnitOfWork` runs one unit of work at a time and restores `InMemoryTable` snapshots on failure. A handler must never call `uow.run` itself: it is already inside a run, and the in-memory version would wait on itself. `InMemoryTable` deep-copies rows on write and read (`structuredClone`), so callers never hold stored objects. Rows must be plain data: `structuredClone` silently turns class instances into plain objects, so repository contract tests check this.
+
+## Repositories and contract tests
+
+- **Versions (ADR-019, `docs/07` §4).** An aggregate's `version` is the stored version it is based on; 0 means never stored (new, or restored from a snapshot). `save` succeeds only if the stored version (0 when there is no row) equals it, otherwise it throws `ConcurrencyConflictError`; it writes the next version and sets it on the instance (`markSaved`), so saving the same instance twice is not a conflict. In memory, `saveVersioned` does this for every repository.
+- **One contract, several adapters.** A repository contract is a function in `test/contract/<context>/` that talks only to the port and the unit of work, e.g. `branchRepositoryContract(makeHarness)`. `versionedRepositoryContract` (in `test/contract/support/`) holds the version cases every repository shares, including "a conflict on a later save undoes earlier saves of the same unit of work". `test/contract/<context>/memory-*.spec.ts` runs the contracts with an in-memory harness from `test/support/`; S0-11 runs the same functions with a PostgreSQL harness under `test/integration/`.
+- **Test data** comes from builders in `test/support/` (e.g. `aBranch()`), never from the demo loader.
 
 ## Rules and how they are enforced
 
-| Rule                                                                                                                                                | Tool                                                             | Where                      |
-| --------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- | -------------------------- |
-| Domain imports only its own domain and the shared kernel (no packages, no Node built-ins)                                                           | dependency-cruiser `domain-is-pure`                              | `.dependency-cruiser.cjs`  |
-| Application imports only its own domain/application, the shared kernel and other contexts' `public/`                                                | dependency-cruiser `application-has-no-infrastructure`           | `.dependency-cruiser.cjs`  |
-| A context reaches another context only through its `public/` folder                                                                                 | dependency-cruiser `only-public-across-contexts`                 | `.dependency-cruiser.cjs`  |
-| The shared kernel imports nothing outside itself                                                                                                    | dependency-cruiser `shared-kernel-is-pure`                       | `.dependency-cruiser.cjs`  |
-| Domain, application and the shared kernel's ports never import `shared-kernel/adapters/`                                                            | dependency-cruiser `core-does-not-use-shared-adapters`           | `.dependency-cruiser.cjs`  |
-| An aggregate's events can be taken only in outbound repository adapters                                                                             | dependency-cruiser `repository-access-only-in-outbound-adapters` | `.dependency-cruiser.cjs`  |
-| No circular dependencies                                                                                                                            | dependency-cruiser `no-circular`                                 | `.dependency-cruiser.cjs`  |
-| Complexity ≤ 9, depth 3, params 3, function ≤ 40 lines (not in tests), file ≤ 300 lines, 1 class per file, no `any`, no `!`                         | ESLint + typescript-eslint (type-aware)                          | `eslint.config.mjs`        |
-| `strict`, `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`, `noImplicitOverride`, `noFallthroughCasesInSwitch`                              | TypeScript                                                       | `tsconfig.json`            |
-| Shared kernel + domain + application line coverage ≥ 80 %                                                                                           | Vitest coverage (v8)                                             | `vitest.config.ts`         |
-| No high or critical dependency vulnerabilities                                                                                                      | `npm audit --audit-level=high`                                   | `.github/workflows/ci.yml` |
-| The API contract lints without errors or warnings (`recommended` rules; `info-license` and `no-server-example.com` turned off, reasons in the file) | Redocly CLI                                                      | `redocly.yaml`             |
+| Rule                                                                                                                                                | Tool                                                             | Where                          |
+| --------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- | ------------------------------ |
+| Domain imports only its own domain and the shared kernel (no packages, no Node built-ins)                                                           | dependency-cruiser `domain-is-pure`                              | `.dependency-cruiser.cjs`      |
+| Application imports only its own domain/application, the shared kernel and other contexts' `public/`                                                | dependency-cruiser `application-has-no-infrastructure`           | `.dependency-cruiser.cjs`      |
+| A context reaches another context only through its `public/` folder                                                                                 | dependency-cruiser `only-public-across-contexts`                 | `.dependency-cruiser.cjs`      |
+| The shared kernel imports nothing outside itself                                                                                                    | dependency-cruiser `shared-kernel-is-pure`                       | `.dependency-cruiser.cjs`      |
+| Domain, application and the shared kernel's ports never import `shared-kernel/adapters/`                                                            | dependency-cruiser `core-does-not-use-shared-adapters`           | `.dependency-cruiser.cjs`      |
+| An aggregate's events can be taken only in outbound repository adapters                                                                             | dependency-cruiser `repository-access-only-in-outbound-adapters` | `.dependency-cruiser.cjs`      |
+| Demo data (`adapters/inbound/demo/`) is imported only by the composition root                                                                       | dependency-cruiser `demo-data-only-from-composition`             | `.dependency-cruiser.cjs`      |
+| Demo data is never loaded in production (`DEMO_DATA=true` with `NODE_ENV=production` fails startup)                                                 | `isDemoDataEnabled` + e2e test                                   | `src/composition/demo-data.ts` |
+| No circular dependencies                                                                                                                            | dependency-cruiser `no-circular`                                 | `.dependency-cruiser.cjs`      |
+| Complexity ≤ 9, depth 3, params 3, function ≤ 40 lines (not in tests), file ≤ 300 lines, 1 class per file, no `any`, no `!`                         | ESLint + typescript-eslint (type-aware)                          | `eslint.config.mjs`            |
+| `strict`, `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`, `noImplicitOverride`, `noFallthroughCasesInSwitch`                              | TypeScript                                                       | `tsconfig.json`                |
+| Shared kernel + domain + application line coverage ≥ 80 %                                                                                           | Vitest coverage (v8)                                             | `vitest.config.ts`             |
+| No high or critical dependency vulnerabilities                                                                                                      | `npm audit --audit-level=high`                                   | `.github/workflows/ci.yml`     |
+| The API contract lints without errors or warnings (`recommended` rules; `info-license` and `no-server-example.com` turned off, reasons in the file) | Redocly CLI                                                      | `redocly.yaml`                 |
 
 NestJS appears only in `adapters/` and `composition/` (ADR-021); dependency-cruiser fails the build otherwise.
 
@@ -137,18 +162,22 @@ Use cases and ports are plain TypeScript; they are wired into NestJS in `composi
 
 ## Decisions made during development
 
-| Decision                                                                  | Reason                                                                                                                                                                                     |
-| ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| ESM project (`"type": "module"`, `module: nodenext`)                      | NestJS 12 is ESM-only                                                                                                                                                                      |
-| Vitest instead of Jest (`docs/07` v1.1, `docs/04` v1.3)                   | Native ESM support                                                                                                                                                                         |
-| Vitest 5 rather than the 4.1 generated by `nest new`                      | npm 10 crashes resolving Vitest 4.1's optional peer dependencies                                                                                                                           |
-| ESLint + typescript-eslint rather than the oxlint generated by `nest new` | `docs/07` §8; type-aware rules such as `no-floating-promises`                                                                                                                              |
-| TypeScript `~6.0`                                                         | typescript-eslint 8.71 supports TypeScript < 6.1                                                                                                                                           |
-| Node ≥ 22.22.3                                                            | Required by `@angular-devkit/schematics`, used by `@nestjs/schematics`                                                                                                                     |
-| `postgres:14-alpine`, `redis:7.2-alpine`                                  | Images already available on the development machine. PostgreSQL 14 reaches end of life in November 2026; upgrading is a one-line change. Redis runs with `noeviction` for BullMQ (ADR-011) |
-| dependency-cruiser `shared-kernel-is-pure` (`docs/07` v1.1)               | Every domain imports the shared kernel, so its purity protects all of them                                                                                                                 |
-| Prism runs from the `stoplight/prism:5.15.10` Docker image, not npm       | Prism ≥ 5.15.7 needs Node ≥ 24.14; the image keeps it out of our dependencies and `npm audit`. The image is amd64-only, so it runs under emulation on Apple Silicon                        |
-| Prism started with `-m false`                                             | Prism 5.15.10 crashes in its default multiprocess mode                                                                                                                                     |
+| Decision                                                                                           | Reason                                                                                                                                                                                     |
+| -------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| ESM project (`"type": "module"`, `module: nodenext`)                                               | NestJS 12 is ESM-only                                                                                                                                                                      |
+| Vitest instead of Jest (`docs/07` v1.1, `docs/04` v1.3)                                            | Native ESM support                                                                                                                                                                         |
+| Vitest 5 rather than the 4.1 generated by `nest new`                                               | npm 10 crashes resolving Vitest 4.1's optional peer dependencies                                                                                                                           |
+| ESLint + typescript-eslint rather than the oxlint generated by `nest new`                          | `docs/07` §8; type-aware rules such as `no-floating-promises`                                                                                                                              |
+| TypeScript `~6.0`                                                                                  | typescript-eslint 8.71 supports TypeScript < 6.1                                                                                                                                           |
+| Node ≥ 22.22.3                                                                                     | Required by `@angular-devkit/schematics`, used by `@nestjs/schematics`                                                                                                                     |
+| `postgres:14-alpine`, `redis:7.2-alpine`                                                           | Images already available on the development machine. PostgreSQL 14 reaches end of life in November 2026; upgrading is a one-line change. Redis runs with `noeviction` for BullMQ (ADR-011) |
+| dependency-cruiser `shared-kernel-is-pure` (`docs/07` v1.1)                                        | Every domain imports the shared kernel, so its purity protects all of them                                                                                                                 |
+| Prism runs from the `stoplight/prism:5.15.10` Docker image, not npm                                | Prism ≥ 5.15.7 needs Node ≥ 24.14; the image keeps it out of our dependencies and `npm audit`. The image is amd64-only, so it runs under emulation on Apple Silicon                        |
+| Prism started with `-m false`                                                                      | Prism 5.15.10 crashes in its default multiprocess mode                                                                                                                                     |
+| QR tokens are 16 random bytes (22 base64url characters)                                            | The FR-QR-01 minimum (128 bits); shortest QR content                                                                                                                                       |
+| Demo QR codes are a committed snapshot, restored with `Branch.reconstitute`                        | Printed QR codes must stay valid across restarts and the PostgreSQL switch; `Branch.issueQrCode` stays the only way to make a token                                                        |
+| `tsx` runs TypeScript scripts (`npm run demo:snapshot`)                                            | Plain Node cannot resolve our `./x.js` imports to `.ts` files                                                                                                                              |
+| Composition wires use cases with factory providers and symbol tokens (`src/composition/tokens.ts`) | No dependence on decorator metadata (`docs/07` §2)                                                                                                                                         |
 
 ## Known gaps
 

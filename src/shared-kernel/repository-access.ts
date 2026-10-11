@@ -5,3 +5,6 @@
  * shared-kernel adapters. So events cannot be taken, and lost, anywhere else.
  */
 export const takeEvents: unique symbol = Symbol('takeEvents');
+
+/** After a successful save the repository sets the instance's version to the stored version. */
+export const markSaved: unique symbol = Symbol('markSaved');

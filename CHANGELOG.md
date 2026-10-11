@@ -17,9 +17,18 @@ All notable changes to this project are recorded here. The format follows [Keep 
 - S0-03: Shared kernel: `Result` with `map`/`andThen`, branded typed ids (`UserId`, `BrandId`, `BranchId`, `FeedbackId`), `Clock` and `IdGenerator` ports, `DomainEvent`, `DomainError`, `ConcurrencyConflict`, `AggregateRoot`, the `UnitOfWork` port with event routing and outbox records.
 - S0-03: `InMemoryUnitOfWork` and `InMemoryTable`: synchronous event handlers in the same unit of work, outbox records for outbox-routed events, full rollback on any failure; `SystemClock`, `RandomIdGenerator`; test support `FakeClock` and `SequentialIdGenerator`.
 - S0-03: dependency-cruiser rule `core-does-not-use-shared-adapters`; coverage gate now includes the shared kernel.
+- S0-04: Catalog context: `Brand`, `Branch` with `QrCode` entities, `LabelSet`; `QrToken` generated from 16 bytes of an injected `RandomSource` (FR-QR-01); `RevokeQrCode`; `QrResolver` and `LabelSetProvider` open host services (unknown, revoked or malformed tokens give `QR_INVALID`, FR-QR-02); in-memory repositories.
+- S0-04: Repository contract tests: a generic `versionedRepositoryContract` (version 0 insert, save twice, stale conflict, rollback) used by the Brand, Branch and LabelSet contracts, run against the in-memory adapters; Catalog test builders in `test/support/`.
+- S0-04: Shared kernel: `markSaved` key, `RandomSource` port with `CryptoRandomSource`, `saveVersioned` for in-memory repositories, `retryOnConflict`; `Brand` type helper renamed to `Branded`.
+- S0-04: Demo catalog (2 brands, 10 branches, S-4 label sets) under `src/catalog/adapters/inbound/demo/`, with a re-runnable snapshot generator (`npm run demo:snapshot`, `tsx`); loaded by the composition root only with `DEMO_DATA=true`, and startup fails with `NODE_ENV=production`. dependency-cruiser rule `demo-data-only-from-composition`.
+- S0-04: Composition: `PersistenceModule` (shared in-memory store and unit of work) and `CatalogModule`, generated with the Nest CLI and wired with factory providers.
 
 ### Changed
 
+- S0-04 review: concurrency conflicts are thrown (`ConcurrencyConflictError`) and roll back the unit of work; `retryOnConflict` reruns the whole unit of work once and rethrows a second conflict; repository `save` returns `Promise<void>`. New contract case: a conflict on a later save undoes earlier saves.
+- S0-04 review: `Branch` copies QR code dates in and out; revoking an already revoked code returns ok and stores nothing; the demo loader validates snapshot ids; loader and generator refuse snapshot entries without a definition.
+- `docs/07` v1.6: conflicts are thrown and roll back the unit of work; decisions before the first save; no general try/catch inside a unit of work.
+- `docs/07` v1.5: version 0 rule (never-stored aggregate; insert when there is no row), `adapters/inbound/demo/` folder and `demo-data-only-from-composition` rule.
 - `docs/07` v1.4: domain code is grouped by aggregate (`domain/<aggregate>/`), use cases live in `application/use-cases/`.
 - Shared kernel review fixes: an aggregate's recorded events can only be taken with the `takeEvents` key from `src/shared-kernel/repository-access.ts` (replaces the public `pullEvents()`), and dependency-cruiser rule `repository-access-only-in-outbound-adapters` limits that import to outbound repository adapters. `InMemoryTable` deep-copies rows on write and read, so changing a saved or loaded object no longer changes stored state.
 - `docs/07` v1.3: `takeEvents` key and `repository-access-only-in-outbound-adapters` rule; in-memory tables copy rows, rows are plain data (checked by repository contract tests); after a successful save the repository sets the instance's version to the stored version (`markSaved`, implemented in S0-04).

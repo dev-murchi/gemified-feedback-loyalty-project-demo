@@ -1,5 +1,7 @@
 import { InMemoryTable } from '../../../src/shared-kernel/adapters/in-memory-table.js';
 import { InMemoryUnitOfWork } from '../../../src/shared-kernel/adapters/in-memory-unit-of-work.js';
+import { ConcurrencyConflictError } from '../../../src/shared-kernel/concurrency-conflict-error.js';
+import { retryOnConflict } from '../../../src/shared-kernel/retry-on-conflict.js';
 import type { DomainEvent } from '../../../src/shared-kernel/domain-event.js';
 import type {
   EventHandler,
@@ -193,6 +195,70 @@ describe('InMemoryUnitOfWork', () => {
       'first finished',
       'second started',
     ]);
+  });
+
+  it('rolls back the whole unit of work when a synchronous handler conflicts, and a retry runs it again', async () => {
+    // Given a UserRegistered handler that conflicts on its first call only
+    let handlerCalls = 0;
+    let workRuns = 0;
+    const { uow, users, wallets } = setup(({ wallets }) => ({
+      UserRegistered: {
+        sync: [
+          {
+            handle: (e) => {
+              handlerCalls += 1;
+              wallets.set(e.aggregateId, `wallet-${handlerCalls}`);
+              return handlerCalls === 1
+                ? Promise.reject(new ConcurrencyConflictError('wallet-1'))
+                : Promise.resolve();
+            },
+          },
+        ],
+      },
+    }));
+    const registerUser = () =>
+      uow.run(() => {
+        workRuns += 1;
+        users.set('user-1', `user-${workRuns}`);
+        uow.collect([event('UserRegistered', 'user-1')]);
+        return Promise.resolve();
+      });
+
+    // When the unit of work runs with retryOnConflict
+    await retryOnConflict(registerUser);
+
+    // Then it ran twice and only the second run's changes remain
+    expect(workRuns).toBe(2);
+    expect(users.values()).toEqual(['user-2']);
+    expect(wallets.values()).toEqual(['wallet-2']);
+  });
+
+  it('leaves nothing behind when a synchronous handler conflicts and nobody retries', async () => {
+    // Given a UserRegistered handler that always conflicts
+    const { uow, users, wallets } = setup(({ wallets }) => ({
+      UserRegistered: {
+        sync: [
+          {
+            handle: (e) => {
+              wallets.set(e.aggregateId, 'wallet');
+              return Promise.reject(new ConcurrencyConflictError('wallet-1'));
+            },
+          },
+        ],
+      },
+    }));
+
+    // When a unit of work saves a user and collects UserRegistered
+    const run = uow.run(() => {
+      users.set('user-1', 'user');
+      uow.collect([event('UserRegistered', 'user-1')]);
+      return Promise.resolve();
+    });
+
+    // Then the conflict reaches the caller and nothing was stored
+    await expect(run).rejects.toBeInstanceOf(ConcurrencyConflictError);
+    expect(users.values()).toEqual([]);
+    expect(wallets.values()).toEqual([]);
   });
 
   it('refuses to collect events outside a unit of work', () => {

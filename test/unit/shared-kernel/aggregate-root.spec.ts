@@ -1,6 +1,9 @@
 import { AggregateRoot } from '../../../src/shared-kernel/aggregate-root.js';
 import type { DomainEvent } from '../../../src/shared-kernel/domain-event.js';
-import { takeRecordedEvents } from '../../support/recorded-events.js';
+import {
+  markAggregateSaved,
+  takeRecordedEvents,
+} from '../../support/aggregate-access.js';
 
 const OCCURRED_AT = new Date('2026-10-12T09:00:00.000Z');
 
@@ -26,6 +29,17 @@ describe('AggregateRoot', () => {
 
     // Then it reports that version
     expect(counter.version).toBe(3);
+  });
+
+  it('takes the stored version after a save, so the same instance can be saved again', () => {
+    // Given a new aggregate (version 0)
+    const counter = Counter.load(0);
+
+    // When a repository marks it saved at version 1
+    markAggregateSaved(counter, 1);
+
+    // Then it reports the stored version
+    expect(counter.version).toBe(1);
   });
 
   it('returns recorded events once, so each is published once', () => {

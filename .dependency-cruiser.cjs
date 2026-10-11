@@ -67,6 +67,14 @@ module.exports = {
       },
       to: { path: '^src/shared-kernel/repository-access\\.ts$' },
     },
+    {
+      name: 'demo-data-only-from-composition',
+      severity: 'error',
+      from: {
+        pathNot: ['^src/composition/', '^src/[^/]+/adapters/inbound/demo/'],
+      },
+      to: { path: '^src/[^/]+/adapters/inbound/demo/' },
+    },
   ],
   options: {
     doNotFollow: { path: 'node_modules' },
