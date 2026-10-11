@@ -8,10 +8,11 @@ Bu doküman, kodun nasıl yazılacağını tanımlar: Clean Architecture katmanl
 
 | Alan | Değer |
 | --- | --- |
-| Sürüm | 1.2 |
+| Sürüm | 1.3 |
 | Dayandığı dokümanlar | SDD v1.1, Alan Modeli v1.0, Test Stratejisi v1.3 |
 | Değişiklik (1.1) | Test aracı Jest yerine Vitest: NestJS 12 yalnızca ESM; Vitest ESM'i doğal olarak destekler; dependency-cruiser'a `shared-kernel-is-pure` kuralı eklendi (shared kernel'i her domain dolaylı olarak içe aktarır) |
 | Değişiklik (1.2) | `shared-kernel/adapters/` (paylaşılan bellek içi UnitOfWork ve sistem saati) ve `test/support/` (FakeClock) eklendi; dependency-cruiser'a `core-does-not-use-shared-adapters` kuralı eklendi |
+| Değişiklik (1.3) | Olay erişim anahtarı (`takeEvents`, `src/shared-kernel/repository-access.ts`) ve `repository-access-only-in-outbound-adapters` kuralı; `InMemoryTable` satırları kopyalar; save sonrası sürüm kuralı (markSaved; uygulama S0-04) |
 | Kapsam | `src/` ve `test/` altındaki tüm kod |
 
 **Temel hedefler:**
@@ -72,6 +73,7 @@ prompts/                   # sürümlü LLM prompt'ları
 - Invariant'ları yalnızca aggregate korur. Public setter yoktur; durum yalnızca anlamlı iş metotlarıyla değişir (`reserve`, `complete`, `award`).
 - İki fabrika metodu vardır: `create` (yeni nesne, kuralları uygular ve olay üretir) ve `reconstitute` (kalıcı veriden yükleme, olay üretmez).
 - Durum değiştiren metotlar ürettikleri domain olaylarını kaydeder; olaylar unit of work tamamlanırken yayınlanır.
+- Kaydedilen olayları yalnızca outbound repository adapter'ları alır (`aggregate[takeEvents]()`). Anahtar `src/shared-kernel/repository-access.ts` dosyasındadır; başka bir yerden içe aktarılması dependency-cruiser ile engellenir. Böylece olaylar `save` dışında kaybolamaz.
 - Başka aggregate'lere yalnızca kimlikle referans verilir.
 - Aggregate'ler küçük tutulur; sınırsız büyüyen koleksiyonlar (örneğin ledger geçmişi) aggregate'e yüklenmez.
 - Her aggregate bir `version` taşır; eşzamanlılık iyimser kilitle korunur (ADR-019).
@@ -84,7 +86,7 @@ prompts/                   # sürümlü LLM prompt'ları
 
 **Domain servisleri:** Yalnızca tek bir entity'ye ait olmayan kurallar için kullanılır (`PiiMasker`, `LevelPolicy`, `RetryPolicy`). Durum tutmazlar.
 
-**Repository'ler:** Aggregate başına bir repository vardır. Arayüzü application katmanındaki `ports` klasöründedir ve domain nesneleri alıp döner. `save` iyimser kilitle yazar; sürüm uyuşmazsa `ConcurrencyConflict` döner.
+**Repository'ler:** Aggregate başına bir repository vardır. Arayüzü application katmanındaki `ports` klasöründedir ve domain nesneleri alıp döner. `save` iyimser kilitle yazar; sürüm uyuşmazsa `ConcurrencyConflict` döner. Bellek içi repository'ler satırları `InMemoryTable` ile saklar; tablo satırları kopyalayarak yazar ve döndürür (`structuredClone`). Satırlar düz veridir (sınıf örneği veya fonksiyon içermez). Bu kural repository sözleşme testleriyle doğrulanır. Başarılı bir `save` sonrasında repository, bellekteki aggregate nesnesinin sürümünü saklanan sürüme eşitler (`aggregate[markSaved](version)`). Unit of work geri alınırsa nesne atılır ve yeniden yüklenir (ADR-019).
 
 **Anemik modele izin verilmez:** Use case'ler akışı yönetir (yükle, aggregate metodunu çağır, kaydet); iş kararı vermez. Use case içinde bir aggregate'in alanına bakarak `if` yazılıyorsa, o kural aggregate'e taşınmalıdır.
 
@@ -192,6 +194,9 @@ forbidden: [
   { name: 'core-does-not-use-shared-adapters', severity: 'error',
     from: { path: ['^src/[^/]+/(domain|application)/', '^src/shared-kernel/(?!adapters/)'] },
     to: { path: '^src/shared-kernel/adapters/' } },
+  { name: 'repository-access-only-in-outbound-adapters', severity: 'error',
+    from: { pathNot: ['^src/shared-kernel/aggregate-root\\.ts$', '^src/[^/]+/adapters/outbound/', '^src/shared-kernel/adapters/'] },
+    to: { path: '^src/shared-kernel/repository-access\\.ts$' } },
 ]
 ```
 
