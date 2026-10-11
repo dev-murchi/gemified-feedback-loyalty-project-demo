@@ -1,9 +1,10 @@
 import type { DomainEvent } from './domain-event.js';
+import { takeEvents } from './repository-access.js';
 
 /**
  * Base for aggregate roots (docs/07 §4). It carries the version used for optimistic locking
- * (ADR-019) and the events recorded by state-changing methods. The repository hands those
- * events to the unit of work when it saves the aggregate.
+ * (ADR-019) and the events recorded by state-changing methods. Only the repository takes those
+ * events, with the `takeEvents` key, and hands them to the unit of work when it saves.
  */
 export abstract class AggregateRoot<Event extends DomainEvent = DomainEvent> {
   #events: Event[] = [];
@@ -15,7 +16,7 @@ export abstract class AggregateRoot<Event extends DomainEvent = DomainEvent> {
   }
 
   /** Returns the recorded events and clears them, so each event is published once. */
-  pullEvents(): readonly Event[] {
+  [takeEvents](): readonly Event[] {
     const events = this.#events;
     this.#events = [];
     return events;

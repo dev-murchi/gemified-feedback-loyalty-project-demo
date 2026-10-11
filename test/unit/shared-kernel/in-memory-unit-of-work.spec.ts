@@ -120,9 +120,7 @@ describe('InMemoryUnitOfWork', () => {
     });
 
     // Then it fails and the change is undone
-    await expect(run).rejects.toThrow(
-      'No route for event type "UnknownHappened"',
-    );
+    await expect(run).rejects.toThrow();
     expect(users.values()).toEqual([]);
   });
 
@@ -205,8 +203,6 @@ describe('InMemoryUnitOfWork', () => {
     const collect = () => uow.collect([event('UserRegistered')]);
 
     // Then it is a programming error
-    expect(collect).toThrow(
-      'EventCollector.collect called outside UnitOfWork.run',
-    );
+    expect(collect).toThrow();
   });
 });

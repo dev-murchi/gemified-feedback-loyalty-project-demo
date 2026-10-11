@@ -20,6 +20,8 @@ All notable changes to this project are recorded here. The format follows [Keep 
 
 ### Changed
 
+- Shared kernel review fixes: an aggregate's recorded events can only be taken with the `takeEvents` key from `src/shared-kernel/repository-access.ts` (replaces the public `pullEvents()`), and dependency-cruiser rule `repository-access-only-in-outbound-adapters` limits that import to outbound repository adapters. `InMemoryTable` deep-copies rows on write and read, so changing a saved or loaded object no longer changes stored state.
+- `docs/07` v1.3: `takeEvents` key and `repository-access-only-in-outbound-adapters` rule; in-memory tables copy rows, rows are plain data (checked by repository contract tests); after a successful save the repository sets the instance's version to the stored version (`markSaved`, implemented in S0-04).
 - `docs/07` v1.2: `shared-kernel/adapters/` and `test/support/` folders, `core-does-not-use-shared-adapters` rule.
 - API contract 0.2.1-demo: description for the `Cüzdan` tag. No endpoint or schema changes.
 - `docs/07` v1.1 and `docs/04` v1.3: Vitest replaces Jest; `docs/07` adds the `shared-kernel-is-pure` dependency rule.

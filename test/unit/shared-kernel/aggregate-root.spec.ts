@@ -1,5 +1,6 @@
 import { AggregateRoot } from '../../../src/shared-kernel/aggregate-root.js';
 import type { DomainEvent } from '../../../src/shared-kernel/domain-event.js';
+import { takeRecordedEvents } from '../../support/recorded-events.js';
 
 const OCCURRED_AT = new Date('2026-10-12T09:00:00.000Z');
 
@@ -34,8 +35,8 @@ describe('AggregateRoot', () => {
     counter.increment();
 
     // When the events are pulled twice
-    const first: readonly DomainEvent[] = counter.pullEvents();
-    const second = counter.pullEvents();
+    const first: readonly DomainEvent[] = takeRecordedEvents(counter);
+    const second = takeRecordedEvents(counter);
 
     // Then the first pull has both events and the second has none
     expect(first.map((event) => event.type)).toEqual([

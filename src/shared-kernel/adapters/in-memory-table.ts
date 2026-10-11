@@ -7,18 +7,24 @@ export interface Snapshottable {
 }
 
 /**
- * A keyed in-memory store for in-memory repositories (ADR-017). Store plain, immutable rows
- * (persisted state), never live aggregate objects: the snapshot is a shallow copy.
+ * A keyed in-memory store for in-memory repositories (ADR-017). Rows are deep-copied on the way
+ * in and on the way out, so no caller ever holds a stored object: changing a saved or loaded
+ * object never changes stored state, and the snapshot can stay a shallow copy.
+ *
+ * Rows must be plain data. structuredClone throws on functions, but it silently turns a class
+ * instance into a plain object (methods and prototype are lost), so storing an aggregate here
+ * would not fail loudly. Repository contract tests check that rows are plain (docs/07 §4).
  */
 export class InMemoryTable<Key, Row> implements Snapshottable {
   readonly #rows = new Map<Key, Row>();
 
   get(key: Key): Row | undefined {
-    return this.#rows.get(key);
+    const row = this.#rows.get(key);
+    return row === undefined ? undefined : structuredClone(row);
   }
 
   set(key: Key, row: Row): void {
-    this.#rows.set(key, row);
+    this.#rows.set(key, structuredClone(row));
   }
 
   delete(key: Key): void {
@@ -26,7 +32,7 @@ export class InMemoryTable<Key, Row> implements Snapshottable {
   }
 
   values(): Row[] {
-    return [...this.#rows.values()];
+    return [...this.#rows.values()].map((row) => structuredClone(row));
   }
 
   snapshot(): Restore {

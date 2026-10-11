@@ -93,27 +93,28 @@ How a state change and its consequences end up in one transaction (ADR-014, ADR-
 
 1. A use case calls `uow.run(async () => { … })`.
 2. An aggregate method records an event (`recordEvent`).
-3. The repository's `save` writes the row and hands the aggregate's events to the unit of work (`EventCollector.collect`).
+3. The repository's `save` writes the row and takes the aggregate's events with the `takeEvents` key (`aggregate[takeEvents]()`), then hands them to the unit of work (`EventCollector.collect`).
 4. When the work finishes, each event is looked up in the routing table built in `composition/`: synchronous handlers run inside the same transaction; outbox-routed events (`FeedbackSubmitted`) become outbox records. An event without a route fails the transaction.
 5. If anything throws, every change is undone, outbox included.
 
-`InMemoryUnitOfWork` runs one unit of work at a time and restores `InMemoryTable` snapshots on failure. A handler must never call `uow.run` itself: it is already inside a run, and the in-memory version would wait on itself. In-memory tables store plain rows, not live aggregate objects.
+`InMemoryUnitOfWork` runs one unit of work at a time and restores `InMemoryTable` snapshots on failure. A handler must never call `uow.run` itself: it is already inside a run, and the in-memory version would wait on itself. `InMemoryTable` deep-copies rows on write and read (`structuredClone`), so callers never hold stored objects. Rows must be plain data: `structuredClone` silently turns class instances into plain objects, so repository contract tests check this.
 
 ## Rules and how they are enforced
 
-| Rule                                                                                                                                                | Tool                                                   | Where                      |
-| --------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ | -------------------------- |
-| Domain imports only its own domain and the shared kernel (no packages, no Node built-ins)                                                           | dependency-cruiser `domain-is-pure`                    | `.dependency-cruiser.cjs`  |
-| Application imports only its own domain/application, the shared kernel and other contexts' `public/`                                                | dependency-cruiser `application-has-no-infrastructure` | `.dependency-cruiser.cjs`  |
-| A context reaches another context only through its `public/` folder                                                                                 | dependency-cruiser `only-public-across-contexts`       | `.dependency-cruiser.cjs`  |
-| The shared kernel imports nothing outside itself                                                                                                    | dependency-cruiser `shared-kernel-is-pure`             | `.dependency-cruiser.cjs`  |
-| Domain, application and the shared kernel's ports never import `shared-kernel/adapters/`                                                            | dependency-cruiser `core-does-not-use-shared-adapters` | `.dependency-cruiser.cjs`  |
-| No circular dependencies                                                                                                                            | dependency-cruiser `no-circular`                       | `.dependency-cruiser.cjs`  |
-| Complexity ≤ 9, depth 3, params 3, function ≤ 40 lines (not in tests), file ≤ 300 lines, 1 class per file, no `any`, no `!`                         | ESLint + typescript-eslint (type-aware)                | `eslint.config.mjs`        |
-| `strict`, `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`, `noImplicitOverride`, `noFallthroughCasesInSwitch`                              | TypeScript                                             | `tsconfig.json`            |
-| Shared kernel + domain + application line coverage ≥ 80 %                                                                                           | Vitest coverage (v8)                                   | `vitest.config.ts`         |
-| No high or critical dependency vulnerabilities                                                                                                      | `npm audit --audit-level=high`                         | `.github/workflows/ci.yml` |
-| The API contract lints without errors or warnings (`recommended` rules; `info-license` and `no-server-example.com` turned off, reasons in the file) | Redocly CLI                                            | `redocly.yaml`             |
+| Rule                                                                                                                                                | Tool                                                             | Where                      |
+| --------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- | -------------------------- |
+| Domain imports only its own domain and the shared kernel (no packages, no Node built-ins)                                                           | dependency-cruiser `domain-is-pure`                              | `.dependency-cruiser.cjs`  |
+| Application imports only its own domain/application, the shared kernel and other contexts' `public/`                                                | dependency-cruiser `application-has-no-infrastructure`           | `.dependency-cruiser.cjs`  |
+| A context reaches another context only through its `public/` folder                                                                                 | dependency-cruiser `only-public-across-contexts`                 | `.dependency-cruiser.cjs`  |
+| The shared kernel imports nothing outside itself                                                                                                    | dependency-cruiser `shared-kernel-is-pure`                       | `.dependency-cruiser.cjs`  |
+| Domain, application and the shared kernel's ports never import `shared-kernel/adapters/`                                                            | dependency-cruiser `core-does-not-use-shared-adapters`           | `.dependency-cruiser.cjs`  |
+| An aggregate's events can be taken only in outbound repository adapters                                                                             | dependency-cruiser `repository-access-only-in-outbound-adapters` | `.dependency-cruiser.cjs`  |
+| No circular dependencies                                                                                                                            | dependency-cruiser `no-circular`                                 | `.dependency-cruiser.cjs`  |
+| Complexity ≤ 9, depth 3, params 3, function ≤ 40 lines (not in tests), file ≤ 300 lines, 1 class per file, no `any`, no `!`                         | ESLint + typescript-eslint (type-aware)                          | `eslint.config.mjs`        |
+| `strict`, `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`, `noImplicitOverride`, `noFallthroughCasesInSwitch`                              | TypeScript                                                       | `tsconfig.json`            |
+| Shared kernel + domain + application line coverage ≥ 80 %                                                                                           | Vitest coverage (v8)                                             | `vitest.config.ts`         |
+| No high or critical dependency vulnerabilities                                                                                                      | `npm audit --audit-level=high`                                   | `.github/workflows/ci.yml` |
+| The API contract lints without errors or warnings (`recommended` rules; `info-license` and `no-server-example.com` turned off, reasons in the file) | Redocly CLI                                                      | `redocly.yaml`             |
 
 NestJS appears only in `adapters/` and `composition/` (ADR-021); dependency-cruiser fails the build otherwise.
 

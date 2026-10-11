@@ -55,6 +55,18 @@ module.exports = {
       },
       to: { path: '^src/shared-kernel/adapters/' },
     },
+    {
+      name: 'repository-access-only-in-outbound-adapters',
+      severity: 'error',
+      from: {
+        pathNot: [
+          '^src/shared-kernel/aggregate-root\\.ts$',
+          '^src/[^/]+/adapters/outbound/',
+          '^src/shared-kernel/adapters/',
+        ],
+      },
+      to: { path: '^src/shared-kernel/repository-access\\.ts$' },
+    },
   ],
   options: {
     doNotFollow: { path: 'node_modules' },
