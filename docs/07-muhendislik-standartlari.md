@@ -8,9 +8,10 @@ Bu doküman, kodun nasıl yazılacağını tanımlar: Clean Architecture katmanl
 
 | Alan | Değer |
 | --- | --- |
-| Sürüm | 1.1 |
+| Sürüm | 1.2 |
 | Dayandığı dokümanlar | SDD v1.1, Alan Modeli v1.0, Test Stratejisi v1.3 |
 | Değişiklik (1.1) | Test aracı Jest yerine Vitest: NestJS 12 yalnızca ESM; Vitest ESM'i doğal olarak destekler; dependency-cruiser'a `shared-kernel-is-pure` kuralı eklendi (shared kernel'i her domain dolaylı olarak içe aktarır) |
+| Değişiklik (1.2) | `shared-kernel/adapters/` (paylaşılan bellek içi UnitOfWork ve sistem saati) ve `test/support/` (FakeClock) eklendi; dependency-cruiser'a `core-does-not-use-shared-adapters` kuralı eklendi |
 | Kapsam | `src/` ve `test/` altındaki tüm kod |
 
 **Temel hedefler:**
@@ -37,7 +38,8 @@ Bu doküman, kodun nasıl yazılacağını tanımlar: Clean Architecture katmanl
 
 ```
 src/
-  shared-kernel/           # tipli kimlikler, Clock, Result, DomainEvent, DomainError, UnitOfWork
+  shared-kernel/           # tipli kimlikler, Clock, Result, DomainEvent, DomainError, UnitOfWork (port ve tipler)
+    adapters/              # paylaşılan bellek içi UnitOfWork ve sistem saati (saf TypeScript)
   identity/
     domain/                # aggregate, entity, değer nesnesi, domain servisi, olay, hata
     application/
@@ -52,6 +54,7 @@ src/
   main.api.ts
   main.worker.ts
 test/
+  support/                 # FakeClock ve test yardımcıları
   unit/<context>/          # domain ve application testleri
   contract/                # repository sözleşme testleri (bellek içi ve PostgreSQL)
   integration/             # gerçek PostgreSQL ve Redis ile adapter testleri
@@ -186,6 +189,9 @@ forbidden: [
   { name: 'shared-kernel-is-pure', severity: 'error',
     from: { path: '^src/shared-kernel/' },
     to: { pathNot: '^src/shared-kernel/' } },
+  { name: 'core-does-not-use-shared-adapters', severity: 'error',
+    from: { path: ['^src/[^/]+/(domain|application)/', '^src/shared-kernel/(?!adapters/)'] },
+    to: { path: '^src/shared-kernel/adapters/' } },
 ]
 ```
 
