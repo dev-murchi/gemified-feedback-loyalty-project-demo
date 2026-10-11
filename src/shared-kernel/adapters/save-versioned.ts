@@ -18,38 +18,67 @@ export interface VersionedEntry<Row extends VersionedRow> {
   readonly toRow: (version: number) => Row;
 }
 
-function write<Row extends VersionedRow>(
+/**
+ * Optimistic lock (ADR-019, docs/07 §4): the stored version (0 if there is no row) must equal the
+ * aggregate's version, otherwise ConcurrencyConflictError. Returns the stored version.
+ */
+export function checkVersion<Row extends VersionedRow>(
+  table: InMemoryTable<string, Row>,
+  key: string,
+  aggregate: AggregateRoot,
+): number {
+  const storedVersion = table.get(key)?.version ?? 0;
+  if (storedVersion !== aggregate.version)
+    throw new ConcurrencyConflictError(key);
+  return storedVersion;
+}
+
+/** A checked write: the entry plus the stored version that checkVersion returned. */
+export interface VersionedWrite<
+  Row extends VersionedRow,
+> extends VersionedEntry<Row> {
+  readonly storedVersion: number;
+}
+
+/**
+ * Writes the row with the next version, hands the aggregate's events to the unit of work and sets
+ * the stored version on the instance (markSaved). Call only after checkVersion and every other
+ * check, so nothing is written when a check fails.
+ */
+export function commitVersioned<Row extends VersionedRow>(
   store: VersionedStore<Row>,
   aggregate: AggregateRoot,
-  entry: VersionedEntry<Row>,
+  write: VersionedWrite<Row>,
 ): void {
-  const storedVersion = store.table.get(entry.key)?.version ?? 0;
-  if (storedVersion !== aggregate.version)
-    throw new ConcurrencyConflictError(entry.key);
-  const version = storedVersion + 1;
-  store.table.set(entry.key, entry.toRow(version));
+  const version = write.storedVersion + 1;
+  store.table.set(write.key, write.toRow(version));
   store.events.collect(aggregate[takeEvents]());
   aggregate[markSaved](version);
 }
 
-/**
- * The save step every in-memory repository shares (ADR-019, docs/07 §4): the stored version (0 if
- * there is no row) must equal the aggregate's version, otherwise ConcurrencyConflictError, which
- * rolls back the unit of work. On success the row is written with the next version, the
- * aggregate's events go to the unit of work and the instance takes the stored version (markSaved).
- * Must run inside a unit of work.
- */
-export function saveVersioned<Row extends VersionedRow>(
-  store: VersionedStore<Row>,
-  aggregate: AggregateRoot,
-  entry: VersionedEntry<Row>,
-): Promise<void> {
+/** Runs synchronous repository work and reports a thrown error as a rejected promise. */
+export function asPromise(work: () => void): Promise<void> {
   try {
-    write(store, aggregate, entry);
+    work();
     return Promise.resolve();
   } catch (error) {
     return Promise.reject(
       error instanceof Error ? error : new Error(String(error)),
     );
   }
+}
+
+/**
+ * The save step every in-memory repository shares: checkVersion, then commitVersioned. A conflict
+ * rolls back the unit of work. Must run inside a unit of work.
+ */
+export function saveVersioned<Row extends VersionedRow>(
+  store: VersionedStore<Row>,
+  aggregate: AggregateRoot,
+  entry: VersionedEntry<Row>,
+): Promise<void> {
+  return asPromise(() => {
+    const storedVersion = checkVersion(store.table, entry.key, aggregate);
+    commitVersioned(store, aggregate, { ...entry, storedVersion });
+  });
 }

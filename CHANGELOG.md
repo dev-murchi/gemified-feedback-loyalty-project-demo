@@ -25,6 +25,7 @@ All notable changes to this project are recorded here. The format follows [Keep 
 
 ### Changed
 
+- `docs/07` v1.9: adapters log through the shared-kernel `Logger` port; no personal data in log fields; tests use the `RecordingLogger` fake.
 - `docs/07` v1.8 and `docs/08`: context-specific access keys (`*-access.ts`) with the `context-access-only-in-domain-and-outbound` rule; event routes are registered only in `src/composition/event-routes.ts` and frozen afterwards; the `UserRegistered` → `OpenWallet` wiring moves back into S0-06.
 - SDD v1.2 (development-time change, S0-06): `LEDGER_ENTRIES.xp_total_after` stores the total XP after each entry, so a feedback's level-up (FR-GAM-05) is derived from a fact that never changes; references to SDD v1.1 updated.
 - `docs/07` v1.7: only the ledger idempotency-key constraint, matched by name, becomes `ConcurrencyConflictError`; every other unique violation stays an infrastructure error. `docs/08` S0-11: the PostgreSQL adapter maps only that named constraint.

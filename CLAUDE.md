@@ -43,7 +43,7 @@ A first Sprint 0 attempt existed; its code and the git history were removed on p
 | `docs/03-tehdit-modeli.md` | STRIDE threats and mitigations |
 | `docs/04-test-stratejisi.md` (v1.3) | Test levels, critical scenarios, demo test subset (§8) |
 | `docs/06-alan-modeli.md` (v1.0) | **DDD model:** bounded contexts, context map, ubiquitous language (TR↔EN), aggregates, invariants, events, ports, use cases, transaction boundaries |
-| `docs/07-muhendislik-standartlari.md` (v1.8) | **Coding rules:** layers, folder layout, DDD rules, use-case pattern, error handling, quality gates, ESLint + dependency-cruiser config, tests, DoD |
+| `docs/07-muhendislik-standartlari.md` (v1.9) | **Coding rules:** layers, folder layout, DDD rules, use-case pattern, error handling, quality gates, ESLint + dependency-cruiser config, tests, DoD |
 | `docs/08-sprint-0-backlog.md` | **Work order:** S0-01..S0-15 with done criteria and cut line |
 | `docs/api/openapi.yaml` (0.2.1-demo) | API contract: 12 endpoints, RFC 9457 errors, 17 error codes. Code must match it exactly |
 

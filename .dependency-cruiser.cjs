@@ -75,6 +75,15 @@ module.exports = {
       },
       to: { path: '^src/[^/]+/adapters/inbound/demo/' },
     },
+    {
+      name: 'context-access-only-in-domain-and-outbound',
+      severity: 'error',
+      from: {
+        path: '^src/',
+        pathNot: ['^src/[^/]+/domain/', '^src/[^/]+/adapters/outbound/'],
+      },
+      to: { path: '^src/[^/]+/domain/.+-access\\.ts$' },
+    },
   ],
   options: {
     doNotFollow: { path: 'node_modules' },
