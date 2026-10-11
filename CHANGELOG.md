@@ -22,6 +22,8 @@ All notable changes to this project are recorded here. The format follows [Keep 
 - S0-04: Shared kernel: `markSaved` key, `RandomSource` port with `CryptoRandomSource`, `saveVersioned` for in-memory repositories, `retryOnConflict`; `Brand` type helper renamed to `Branded`.
 - S0-04: Demo catalog (2 brands, 10 branches, S-4 label sets) under `src/catalog/adapters/inbound/demo/`, with a re-runnable snapshot generator (`npm run demo:snapshot`, `tsx`); loaded by the composition root only with `DEMO_DATA=true`, and startup fails with `NODE_ENV=production`. dependency-cruiser rule `demo-data-only-from-composition`.
 - S0-04: Composition: `PersistenceModule` (shared in-memory store and unit of work) and `CatalogModule`, generated with the Nest CLI and wired with factory providers.
+- S0-06: Gamification context: publishers' event contracts `UserRegistered` and `FeedbackValidated` (types only); `Wallet` with an append-only ledger (`reward:{feedbackId}`, room for `clawback:`), `xpTotalAfter` and earning date = `submittedAt`; `LevelPolicy` and `RewardAmounts` (validated); `OpenWallet` (deliberately not idempotent), `AwardReward`, `GetWallet`, `RewardLookup`; in-memory wallet repository with its contract and the TC-GAM-04 property test (`fast-check`).
+- S0-06: `EventRouter` (typed keys, frozen after registration, refuses lookups before freeze); routes registered only in `src/composition/event-routes.ts`; start-up fails if the routes were never frozen. `Logger` port with `ConsoleLogger` and the `RecordingLogger` test fake.
 
 ### Changed
 
