@@ -3,9 +3,10 @@ import { InMemoryUnitOfWork } from '../../../src/shared-kernel/adapters/in-memor
 import { ConcurrencyConflictError } from '../../../src/shared-kernel/concurrency-conflict-error.js';
 import { retryOnConflict } from '../../../src/shared-kernel/retry-on-conflict.js';
 import type { DomainEvent } from '../../../src/shared-kernel/domain-event.js';
-import type {
-  EventHandler,
-  EventRoutes,
+import {
+  fixedRoutes,
+  type EventHandler,
+  type EventRoutes,
 } from '../../../src/shared-kernel/event-routing.js';
 import type { OutboxRecord } from '../../../src/shared-kernel/outbox-record.js';
 import { FakeClock } from '../../support/fake-clock.js';
@@ -27,7 +28,7 @@ function setup(
   const wallets = new InMemoryTable<string, string>();
   const outbox = new InMemoryTable<string, OutboxRecord>();
   const uow = new InMemoryUnitOfWork({
-    routes: routes({ wallets }),
+    routes: fixedRoutes(routes({ wallets })),
     tables: [users, wallets],
     outbox,
     clock,

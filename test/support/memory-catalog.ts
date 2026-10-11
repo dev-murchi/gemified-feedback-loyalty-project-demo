@@ -16,6 +16,7 @@ import type { LabelSetRepository } from '../../src/catalog/application/ports/lab
 import { InMemoryTable } from '../../src/shared-kernel/adapters/in-memory-table.js';
 import { InMemoryUnitOfWork } from '../../src/shared-kernel/adapters/in-memory-unit-of-work.js';
 import type { OutboxRecord } from '../../src/shared-kernel/outbox-record.js';
+import { fixedRoutes } from '../../src/shared-kernel/event-routing.js';
 import type { UnitOfWork } from '../../src/shared-kernel/unit-of-work.js';
 import { FakeClock } from './fake-clock.js';
 import { SequentialIdGenerator } from './sequential-id-generator.js';
@@ -35,7 +36,7 @@ export function memoryCatalogHarness(): Promise<CatalogHarness> {
   const branches = new InMemoryTable<string, BranchRow>();
   const labelSets = new InMemoryTable<string, LabelSetRow>();
   const uow = new InMemoryUnitOfWork({
-    routes: {},
+    routes: fixedRoutes({}),
     tables: [brands, branches, labelSets],
     outbox: new InMemoryTable<string, OutboxRecord>(),
     clock: new FakeClock(),

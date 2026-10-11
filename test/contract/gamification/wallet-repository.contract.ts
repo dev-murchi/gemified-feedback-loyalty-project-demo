@@ -1,6 +1,7 @@
 import { LedgerKey } from '../../../src/gamification/domain/wallet/ledger-entry.js';
 import { Wallet } from '../../../src/gamification/domain/wallet/wallet.js';
 import { ConcurrencyConflictError } from '../../../src/shared-kernel/concurrency-conflict-error.js';
+import type { UserId } from '../../../src/shared-kernel/ids.js';
 import {
   aClaim,
   awardThroughPort,
@@ -140,6 +141,27 @@ export function walletRepositoryContract(
       ).toEqual(['reward:f0000000-0000-4000-8000-000000000001']);
       expect(await balance()).toEqual({ xp: 10, points: 5, version: 2 });
       expect(await harness.ledgerOf(WALLET_USER_ID)).toHaveLength(1);
+    });
+
+    it('finds a stored ledger entry by key, and nothing for an unknown key or another user', async () => {
+      // Given feedback 1 was awarded
+      await awardThroughPort(harness, aClaim());
+      const key = LedgerKey.reward(feedbackId(1));
+
+      // When entries are looked up
+      const found = await harness.wallets.findLedgerEntry(WALLET_USER_ID, key);
+      const unknown = await harness.wallets.findLedgerEntry(
+        WALLET_USER_ID,
+        LedgerKey.reward(feedbackId(2)),
+      );
+      const otherUser = await harness.wallets.findLedgerEntry(
+        'a0000000-0000-4000-8000-0000000000ff' as UserId,
+        key,
+      );
+
+      // Then only the user's own stored entry is found
+      expect([found?.key, found?.xpTotalAfter]).toEqual([key, 10]);
+      expect([unknown, otherUser]).toEqual([undefined, undefined]);
     });
 
     it('never changes a stored ledger entry; later entries are appended', async () => {

@@ -1,13 +1,13 @@
 import type { Clock } from '../clock.js';
 import type { DomainEvent } from '../domain-event.js';
-import type { EventRoutes } from '../event-routing.js';
+import type { EventRouting } from '../event-routing.js';
 import type { IdGenerator } from '../id-generator.js';
 import type { OutboxRecord } from '../outbox-record.js';
 import type { EventCollector, UnitOfWork } from '../unit-of-work.js';
 import type { InMemoryTable, Snapshottable } from './in-memory-table.js';
 
 export interface InMemoryUnitOfWorkDeps {
-  readonly routes: EventRoutes;
+  readonly routes: EventRouting;
   /** Every in-memory table whose changes must be undone on failure. */
   readonly tables: readonly Snapshottable[];
   readonly outbox: InMemoryTable<string, OutboxRecord>;
@@ -72,7 +72,7 @@ export class InMemoryUnitOfWork implements UnitOfWork, EventCollector {
   }
 
   async #deliver(event: DomainEvent): Promise<void> {
-    const route = this.#deps.routes[event.type];
+    const route = this.#deps.routes.routeFor(event.type);
     if (route === undefined)
       throw new Error(`No route for event type "${event.type}"`);
     if ('outbox' in route) {

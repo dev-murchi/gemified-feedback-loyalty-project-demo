@@ -1,12 +1,16 @@
 import type { BrandRow } from '../catalog/adapters/outbound/memory-brand.repository.js';
 import type { BranchRow } from '../catalog/adapters/outbound/memory-branch.repository.js';
 import type { LabelSetRow } from '../catalog/adapters/outbound/memory-label-set.repository.js';
+import type {
+  LedgerRow,
+  WalletRow,
+} from '../gamification/adapters/outbound/memory-wallet.repository.js';
 import { InMemoryTable } from '../shared-kernel/adapters/in-memory-table.js';
 import { InMemoryUnitOfWork } from '../shared-kernel/adapters/in-memory-unit-of-work.js';
 import { RandomIdGenerator } from '../shared-kernel/adapters/random-id-generator.js';
 import { SystemClock } from '../shared-kernel/adapters/system-clock.js';
 import type { Clock } from '../shared-kernel/clock.js';
-import type { EventRoutes } from '../shared-kernel/event-routing.js';
+import type { EventRouting } from '../shared-kernel/event-routing.js';
 import type { IdGenerator } from '../shared-kernel/id-generator.js';
 import type { OutboxRecord } from '../shared-kernel/outbox-record.js';
 
@@ -14,6 +18,11 @@ export interface CatalogTables {
   readonly brands: InMemoryTable<string, BrandRow>;
   readonly branches: InMemoryTable<string, BranchRow>;
   readonly labelSets: InMemoryTable<string, LabelSetRow>;
+}
+
+export interface GamificationTables {
+  readonly wallets: InMemoryTable<string, WalletRow>;
+  readonly ledger: InMemoryTable<string, LedgerRow>;
 }
 
 /**
@@ -25,22 +34,30 @@ export interface InMemoryStore {
   readonly clock: Clock;
   readonly ids: IdGenerator;
   readonly catalog: CatalogTables;
+  readonly gamification: GamificationTables;
 }
 
-export function createInMemoryStore(routes: EventRoutes = {}): InMemoryStore {
+/** `routes` is the application's EventRouter, created first and filled after wiring. */
+export function createInMemoryStore(routes: EventRouting): InMemoryStore {
   const clock = new SystemClock();
   const ids = new RandomIdGenerator();
-  const catalog: CatalogTables = {
-    brands: new InMemoryTable(),
-    branches: new InMemoryTable(),
-    labelSets: new InMemoryTable(),
-  };
+  // `satisfies` keeps the literal types, so Object.values below is typed and every table of a
+  // context automatically takes part in rollback.
+  const catalog = {
+    brands: new InMemoryTable<string, BrandRow>(),
+    branches: new InMemoryTable<string, BranchRow>(),
+    labelSets: new InMemoryTable<string, LabelSetRow>(),
+  } satisfies CatalogTables;
+  const gamification = {
+    wallets: new InMemoryTable<string, WalletRow>(),
+    ledger: new InMemoryTable<string, LedgerRow>(),
+  } satisfies GamificationTables;
   const uow = new InMemoryUnitOfWork({
     routes,
-    tables: Object.values(catalog),
+    tables: [...Object.values(catalog), ...Object.values(gamification)],
     outbox: new InMemoryTable<string, OutboxRecord>(),
     clock,
     ids,
   });
-  return { uow, clock, ids, catalog };
+  return { uow, clock, ids, catalog, gamification };
 }

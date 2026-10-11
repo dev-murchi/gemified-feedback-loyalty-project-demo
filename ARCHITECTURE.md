@@ -59,13 +59,20 @@ src/
   main.api.ts              # API entry point
   composition/
     app.module.ts          # composition root (NestJS)
-    persistence.module.ts  # shared in-memory store and unit of work
+    persistence.module.ts  # event router (created first), in-memory store and unit of work, logger,
+                           # start-up check that the routes were frozen
     catalog.module.ts      # Catalog wiring; demo data only with DEMO_DATA=true
-  shared-kernel/           # Result, typed ids, Clock, IdGenerator, RandomSource, DomainEvent, DomainError,
-                           # ConcurrencyConflictError, AggregateRoot, UnitOfWork, event routing, outbox record,
-                           # repository-access keys, retryOnConflict
-    adapters/              # InMemoryTable, InMemoryUnitOfWork, saveVersioned, SystemClock,
-                           # RandomIdGenerator, CryptoRandomSource
+    gamification.module.ts # Gamification wiring; exports the handlers and the read side
+    event-routes.ts        # the only place event routes are registered; freezes the router
+    event-routes.module.ts # runs event-routes.ts during start-up
+    tokens.ts              # injection tokens
+  shared-kernel/           # Result, typed ids, Clock, IdGenerator, RandomSource, Logger, DomainEvent,
+                           # DomainError, ConcurrencyConflictError, AggregateRoot, UnitOfWork, event routing,
+                           # outbox record, repository-access keys, retryOnConflict
+    adapters/              # InMemoryTable, InMemoryUnitOfWork, saveVersioned, EventRouter, SystemClock,
+                           # RandomIdGenerator, CryptoRandomSource, ConsoleLogger
+  identity/public/         # user-registered.ts (event contract, written first in S0-06)
+  feedback/public/         # feedback-validated.ts (event contract, written first in S0-06)
   catalog/
     domain/                # sector, geo-point, topic-key; brand/, branch/ (QrCode, QrToken), label-set/
     application/           # ports/ (repositories), use-cases/ (ResolveQr, ProvideLabelSet, RevokeQrCode)
@@ -73,11 +80,17 @@ src/
       inbound/demo/        # demo catalog definition, generated snapshot, loader
       outbound/            # memory-*.repository.ts
     public/                # QrResolver, LabelSetProvider, CatalogSector
+  gamification/
+    domain/                # level-policy, reward-amounts; wallet/ (Wallet, LedgerEntry, ledger-access)
+    application/           # ports/ (WalletRepository), use-cases/ (OpenWallet, AwardReward, GetWallet,
+                           # LookupReward)
+    adapters/outbound/     # memory-wallet.repository.ts (wallets + append-only ledger)
+    public/                # RewardLookup
 scripts/                   # check-mock.ts, generate-demo-catalog.ts
 test/
   support/                 # fakes, builders, in-memory harnesses
-  unit/                    # shared-kernel/, catalog/, composition/
-  contract/                # support/ (generic contracts), catalog/
+  unit/                    # shared-kernel/, catalog/, gamification/, composition/
+  contract/                # support/ (generic contracts), catalog/, gamification/
   e2e/                     # application-level tests
 ```
 
@@ -109,8 +122,12 @@ How a state change and its consequences end up in one transaction (ADR-014, ADR-
 1. A use case calls `uow.run(async () => { … })`.
 2. An aggregate method records an event (`recordEvent`).
 3. The repository's `save` writes the row and takes the aggregate's events with the `takeEvents` key (`aggregate[takeEvents]()`), then hands them to the unit of work (`EventCollector.collect`).
-4. When the work finishes, each event is looked up in the routing table built in `composition/`: synchronous handlers run inside the same transaction; outbox-routed events (`FeedbackSubmitted`) become outbox records. An event without a route fails the transaction.
+4. When the work finishes, each event is looked up in the `EventRouter`: synchronous handlers run inside the same transaction; outbox-routed events (`FeedbackSubmitted`) become outbox records. An event without a route fails the transaction.
 5. If anything throws, every change is undone, outbox included.
+
+**Event routes.** Event types live with their publisher in `<context>/public/` (e.g. `identity/public/user-registered.ts`); consumers import them, never copy them. `PersistenceModule` creates the `EventRouter` before the store, because the unit of work needs routes, handlers need repositories, and repositories need the unit of work. Context modules export their handlers; only `src/composition/event-routes.ts` registers them, with keys typed from the event types (`register<UserRegistered>('UserRegistered', …)` does not compile with a wrong key or handler), and then freezes the router. Registering after the freeze, or the same type twice, throws; `routeFor` refuses to answer before the freeze; start-up fails if the routes were never frozen. Handlers run inside the publisher's unit of work and never retry themselves.
+
+`OpenWallet` is deliberately not idempotent: a retry reruns the publisher's unit of work from rolled-back state, so a second `UserRegistered` for the same user can only be a bug (e.g. a reused user id getting someone else's wallet). It throws, and the registration rolls back with it. Awards, in contrast, can legitimately be delivered twice (TC-GAM-01), so "already awarded" is `ok`.
 
 **Conflicts and decisions.** `save` throws `ConcurrencyConflictError` on a stale version, which rolls back the whole unit of work. Use cases wrap the complete `uow.run(...)`, load included, in `retryOnConflict`; it reruns once and rethrows a second conflict (at the API: `500 INTERNAL_ERROR`, retryable). A returned `Err` does not roll back, so every decision comes before the first save, and errors inside a unit of work are never swallowed by a general `try/catch` (`docs/07` §5–6).
 
@@ -120,26 +137,36 @@ How a state change and its consequences end up in one transaction (ADR-014, ADR-
 
 - **Versions (ADR-019, `docs/07` §4).** An aggregate's `version` is the stored version it is based on; 0 means never stored (new, or restored from a snapshot). `save` succeeds only if the stored version (0 when there is no row) equals it, otherwise it throws `ConcurrencyConflictError`; it writes the next version and sets it on the instance (`markSaved`), so saving the same instance twice is not a conflict. In memory, `saveVersioned` does this for every repository.
 - **One contract, several adapters.** A repository contract is a function in `test/contract/<context>/` that talks only to the port and the unit of work, e.g. `branchRepositoryContract(makeHarness)`. `versionedRepositoryContract` (in `test/contract/support/`) holds the version cases every repository shares, including "a conflict on a later save undoes earlier saves of the same unit of work". `test/contract/<context>/memory-*.spec.ts` runs the contracts with an in-memory harness from `test/support/`; S0-11 runs the same functions with a PostgreSQL harness under `test/integration/`.
+- **Context access keys.** Besides the shared `takeEvents` and `markSaved` keys, a context may define its own in `domain/<aggregate>/*-access.ts` (e.g. `takeNewLedgerEntries`, which the wallet repository uses to append the wallet's new ledger entries in the same step as the wallet row). Only that context's domain and outbound adapters may import them.
+- **Loading for a decision.** `findWithLedgerKey(userId, key)` loads the wallet together with whether that ledger key exists; the wallet refuses to award for a key it was not loaded for. "Already awarded" returns `ok` and saves nothing. As a backstop, an existing key at insert time (the constraint `ledger_entries_idempotency_key_uq`, matched by name) becomes `ConcurrencyConflictError` with a warning log, so the retry ends with exactly one entry; no other unique violation is mapped (`docs/07` §6).
+- **Inspection in harnesses.** A harness may expose read helpers that are not part of the port (e.g. `ledgerOf`), so contracts can check stored state; the PostgreSQL harness provides the same helpers.
 - **Test data** comes from builders in `test/support/` (e.g. `aBranch()`), never from the demo loader.
+
+## Logging
+
+Adapters log through the shared-kernel `Logger` port (`warn(message, fields)`), never `console` or a framework logger directly. `ConsoleLogger` writes one JSON line; fields come first, so they can never overwrite `level` or `message`. No personal data or feedback text in fields (T-I4). Tests assert log entries with the `RecordingLogger` fake (`docs/07` §6).
 
 ## Rules and how they are enforced
 
-| Rule                                                                                                                                                | Tool                                                             | Where                          |
-| --------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- | ------------------------------ |
-| Domain imports only its own domain and the shared kernel (no packages, no Node built-ins)                                                           | dependency-cruiser `domain-is-pure`                              | `.dependency-cruiser.cjs`      |
-| Application imports only its own domain/application, the shared kernel and other contexts' `public/`                                                | dependency-cruiser `application-has-no-infrastructure`           | `.dependency-cruiser.cjs`      |
-| A context reaches another context only through its `public/` folder                                                                                 | dependency-cruiser `only-public-across-contexts`                 | `.dependency-cruiser.cjs`      |
-| The shared kernel imports nothing outside itself                                                                                                    | dependency-cruiser `shared-kernel-is-pure`                       | `.dependency-cruiser.cjs`      |
-| Domain, application and the shared kernel's ports never import `shared-kernel/adapters/`                                                            | dependency-cruiser `core-does-not-use-shared-adapters`           | `.dependency-cruiser.cjs`      |
-| An aggregate's events can be taken only in outbound repository adapters                                                                             | dependency-cruiser `repository-access-only-in-outbound-adapters` | `.dependency-cruiser.cjs`      |
-| Demo data (`adapters/inbound/demo/`) is imported only by the composition root                                                                       | dependency-cruiser `demo-data-only-from-composition`             | `.dependency-cruiser.cjs`      |
-| Demo data is never loaded in production (`DEMO_DATA=true` with `NODE_ENV=production` fails startup)                                                 | `isDemoDataEnabled` + e2e test                                   | `src/composition/demo-data.ts` |
-| No circular dependencies                                                                                                                            | dependency-cruiser `no-circular`                                 | `.dependency-cruiser.cjs`      |
-| Complexity ≤ 9, depth 3, params 3, function ≤ 40 lines (not in tests), file ≤ 300 lines, 1 class per file, no `any`, no `!`                         | ESLint + typescript-eslint (type-aware)                          | `eslint.config.mjs`            |
-| `strict`, `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`, `noImplicitOverride`, `noFallthroughCasesInSwitch`                              | TypeScript                                                       | `tsconfig.json`                |
-| Shared kernel + domain + application line coverage ≥ 80 %                                                                                           | Vitest coverage (v8)                                             | `vitest.config.ts`             |
-| No high or critical dependency vulnerabilities                                                                                                      | `npm audit --audit-level=high`                                   | `.github/workflows/ci.yml`     |
-| The API contract lints without errors or warnings (`recommended` rules; `info-license` and `no-server-example.com` turned off, reasons in the file) | Redocly CLI                                                      | `redocly.yaml`                 |
+| Rule                                                                                                                                                | Tool                                                             | Where                                   |
+| --------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- | --------------------------------------- |
+| Domain imports only its own domain and the shared kernel (no packages, no Node built-ins)                                                           | dependency-cruiser `domain-is-pure`                              | `.dependency-cruiser.cjs`               |
+| Application imports only its own domain/application, the shared kernel and other contexts' `public/`                                                | dependency-cruiser `application-has-no-infrastructure`           | `.dependency-cruiser.cjs`               |
+| A context reaches another context only through its `public/` folder                                                                                 | dependency-cruiser `only-public-across-contexts`                 | `.dependency-cruiser.cjs`               |
+| The shared kernel imports nothing outside itself                                                                                                    | dependency-cruiser `shared-kernel-is-pure`                       | `.dependency-cruiser.cjs`               |
+| Domain, application and the shared kernel's ports never import `shared-kernel/adapters/`                                                            | dependency-cruiser `core-does-not-use-shared-adapters`           | `.dependency-cruiser.cjs`               |
+| An aggregate's events can be taken only in outbound repository adapters                                                                             | dependency-cruiser `repository-access-only-in-outbound-adapters` | `.dependency-cruiser.cjs`               |
+| Demo data (`adapters/inbound/demo/`) is imported only by the composition root                                                                       | dependency-cruiser `demo-data-only-from-composition`             | `.dependency-cruiser.cjs`               |
+| Demo data is never loaded in production (`DEMO_DATA=true` with `NODE_ENV=production` fails startup)                                                 | `isDemoDataEnabled` + e2e test                                   | `src/composition/demo-data.ts`          |
+| A context's access keys (`*-access.ts`) only in its own domain and outbound adapters                                                                | dependency-cruiser `context-access-only-in-domain-and-outbound`  | `.dependency-cruiser.cjs`               |
+| Event routes are registered only in `src/composition/event-routes.ts` and frozen before serving                                                     | Start-up check (`EVENT_ROUTES_CHECK`) + code review              | `src/composition/persistence.module.ts` |
+| Adapters log only through the `Logger` port, without personal data                                                                                  | Code review                                                      | `docs/07` §6                            |
+| No circular dependencies                                                                                                                            | dependency-cruiser `no-circular`                                 | `.dependency-cruiser.cjs`               |
+| Complexity ≤ 9, depth 3, params 3, function ≤ 40 lines (not in tests), file ≤ 300 lines, 1 class per file, no `any`, no `!`                         | ESLint + typescript-eslint (type-aware)                          | `eslint.config.mjs`                     |
+| `strict`, `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`, `noImplicitOverride`, `noFallthroughCasesInSwitch`                              | TypeScript                                                       | `tsconfig.json`                         |
+| Shared kernel + domain + application line coverage ≥ 80 %                                                                                           | Vitest coverage (v8)                                             | `vitest.config.ts`                      |
+| No high or critical dependency vulnerabilities                                                                                                      | `npm audit --audit-level=high`                                   | `.github/workflows/ci.yml`              |
+| The API contract lints without errors or warnings (`recommended` rules; `info-license` and `no-server-example.com` turned off, reasons in the file) | Redocly CLI                                                      | `redocly.yaml`                          |
 
 NestJS appears only in `adapters/` and `composition/` (ADR-021); dependency-cruiser fails the build otherwise.
 
@@ -178,6 +205,11 @@ Use cases and ports are plain TypeScript; they are wired into NestJS in `composi
 | Demo QR codes are a committed snapshot, restored with `Branch.reconstitute`                        | Printed QR codes must stay valid across restarts and the PostgreSQL switch; `Branch.issueQrCode` stays the only way to make a token                                                        |
 | `tsx` runs TypeScript scripts (`npm run demo:snapshot`)                                            | Plain Node cannot resolve our `./x.js` imports to `.ts` files                                                                                                                              |
 | Composition wires use cases with factory providers and symbol tokens (`src/composition/tokens.ts`) | No dependence on decorator metadata (`docs/07` §2)                                                                                                                                         |
+| S0-06 (Gamification) before S0-05 (Identity)                                                       | Owner decision: every user has a wallet from the moment they exist; the publishers' event contracts are written first                                                                      |
+| `fast-check` for TC-GAM-04                                                                         | Generates and shrinks operation sequences; the seed is printed on failure                                                                                                                  |
+| Each ledger entry stores `xpTotalAfter` (SDD v1.2)                                                 | A feedback's level-up is derived from a fact that never changes                                                                                                                            |
+| A ledger entry's earning date is the feedback's `submittedAt`                                      | Points expiry counts from the customer's visit, and it is identical across retries                                                                                                         |
+| Only the named ledger-key constraint maps to `ConcurrencyConflictError`                            | A duplicate reward key is a concurrency symptom; every other unique violation is an infrastructure error                                                                                   |
 
 ## Known gaps
 

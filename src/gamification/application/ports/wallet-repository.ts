@@ -1,5 +1,8 @@
 import type { UserId } from '../../../shared-kernel/ids.js';
-import type { LedgerKey } from '../../domain/wallet/ledger-entry.js';
+import type {
+  LedgerEntry,
+  LedgerKey,
+} from '../../domain/wallet/ledger-entry.js';
 import type { Wallet } from '../../domain/wallet/wallet.js';
 
 export interface WalletRepository {
@@ -20,4 +23,9 @@ export interface WalletRepository {
    * inside a unit of work.
    */
   save(wallet: Wallet): Promise<void>;
+  /** A stored ledger entry of this user, by idempotency key (for RewardLookup). */
+  findLedgerEntry(
+    userId: UserId,
+    key: LedgerKey,
+  ): Promise<LedgerEntry | undefined>;
 }

@@ -88,6 +88,15 @@ export class MemoryWalletRepository implements WalletRepository {
     return Promise.resolve(toWallet(row, [{ key, exists }]));
   }
 
+  findLedgerEntry(
+    userId: UserId,
+    key: LedgerKey,
+  ): Promise<LedgerEntry | undefined> {
+    const row = this.deps.ledger.get(key);
+    const owned = row !== undefined && row.userId === userId;
+    return Promise.resolve(owned ? toLedgerEntry(row) : undefined);
+  }
+
   /** Wallet version first, then the ledger keys, then all writes (docs/07 §6). */
   save(wallet: Wallet): Promise<void> {
     return asPromise(() => {
