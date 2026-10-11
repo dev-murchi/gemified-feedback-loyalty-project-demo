@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Geri Bildirim ve Sadakat Motoru API
-  version: 0.2.0-demo
+  version: 0.2.1-demo
   description: |
     Demo (Sprint 0) kapsamındaki uç noktaların sözleşmesi. Bu dosya, backend ile Flutter
     ekibi arasındaki anlaşmanın kaynağıdır (SDD ADR-006); uygulamanın ürettiği OpenAPI
@@ -78,6 +78,7 @@ tags:
   - name: Kimlik
     description: Formsuz anonim kayıt ve oturum (SRS FR-AUTH, SDD 7.1)
   - name: Cüzdan
+    description: Kullanıcının XP, puan ve seviye bilgisi (SRS FR-GAM)
   - name: Yorum
     description: QR ile geri bildirim gönderme ve durumunu izleme
   - name: B2B
