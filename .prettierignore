@@ -1,0 +1,6 @@
+dist/
+coverage/
+package-lock.json
+# Docs and the API contract are hand-written; formatting them is a docs change.
+docs/
+CLAUDE.md
