@@ -1,0 +1,1196 @@
+openapi: 3.1.0
+info:
+  title: Geri Bildirim ve Sadakat Motoru API
+  version: 0.2.0-demo
+  description: |
+    Demo (Sprint 0) kapsamındaki uç noktaların sözleşmesi. Bu dosya, backend ile Flutter
+    ekibi arasındaki anlaşmanın kaynağıdır (SDD ADR-006); uygulamanın ürettiği OpenAPI
+    dokümanı CI'da bu dosyayla karşılaştırılır.
+
+    ## Genel kurallar
+
+    - Tüm yanıtlar, hata yanıtları dahil, `X-Request-Id` başlığını taşır; istemci bu başlığı
+      gönderirse aynı değer döner.
+    - Hatalar RFC 9457 Problem Details biçimindedir (`application/problem+json`). Yalnızca OAuth2
+      token uç noktası, RFC 6749 gereği kendi hata biçimini kullanır.
+    - Problem Details'teki `title` ve `detail` alanları geliştiriciye yöneliktir ve kullanıcıya
+      gösterilmez. Kullanıcıya gösterilecek metni uygulama, `code` alanına göre kendisi üretir.
+    - Zaman damgaları ISO 8601 ve UTC'dir. B2B tarih filtreleri için saat dilimi kuralı
+      `from` / `to` parametrelerinde açıklanmıştır (SRS FR-B2B-10).
+    - JSON alanları camelCase'tir; OAuth2 token uç noktası RFC 6749 gereği snake_case kullanır.
+    - Metin uzunlukları, Unicode NFC normalizasyonundan sonra kod noktası (code point) olarak
+      sayılır. Örneğin bir emoji 1 karakterdir.
+
+    ## Hata kataloğu
+
+    | Kod | HTTP | Ne zaman | Tekrar denenir mi? | İstemcinin yapacağı |
+    | --- | --- | --- | --- | --- |
+    | `VALIDATION_ERROR` | 400 | İstek biçimi hatalı; alanlar `errors` dizisinde | Hayır | İsteği düzelt |
+    | `UNAUTHORIZED` | 401 | Erişim token'ı eksik, geçersiz veya süresi dolmuş | Evet, yeni token ile | Challenge al, oturumu yenile, isteği tekrarla |
+    | `CHALLENGE_INVALID` | 401 | Nonce süresi dolmuş, kullanılmış veya bilinmiyor | Evet, yeni nonce ile | Yeni challenge al |
+    | `SIGNATURE_INVALID` | 401 | Challenge imzası doğrulanamadı | Hayır | Cihaz anahtarı bozulmuş olabilir; yeniden kayıt akışı |
+    | `KEY_REVOKED` | 403 | Cihaz anahtarı iptal edilmiş | Hayır | Kullanıcıyı bilgilendir; destek |
+    | `FORBIDDEN` | 403 | B2B token'ının kapsamı yetersiz | Hayır | Doğru kapsamla token al |
+    | `NOT_FOUND` | 404 | Kaynak yok veya isteyene ait değil | Hayır | – |
+    | `FEEDBACK_PENDING` | 409 | Bu şubedeki önceki yorum hâlâ inceleniyor | Evet, önceki yorum sonuçlanınca | Önceki yorumun durumunu göster |
+    | `PAYLOAD_TOO_LARGE` | 413 | İstek gövdesi 8 KB'den büyük | Hayır | – |
+    | `QR_INVALID` | 422 | QR token'ı bilinmiyor, iptal edilmiş veya biçimi bozuk | Hayır | Kullanıcıdan QR'ı yeniden okutmasını iste |
+    | `TEXT_TOO_SHORT` | 422 | Yorum 20 karakterden kısa | Hayır | Kullanıcıdan daha uzun yazmasını iste |
+    | `TEXT_TOO_LONG` | 422 | Yorum 1.000 karakterden uzun | Hayır | Kullanıcıdan kısaltmasını iste |
+    | `IDEMPOTENCY_KEY_MISMATCH` | 422 | Aynı Idempotency-Key farklı bir gövdeyle kullanıldı | Hayır | Yeni yorum için yeni anahtar üret (istemci hatası) |
+    | `REWARD_COOLDOWN` | 422 | Bu şubede, son ödüllü yorumun gönderiminden bu yana 24 saat geçmedi | Hayır, otomatik olarak değil | `retryAfterSeconds` ile kalan süreyi göster |
+    | `ATTEMPTS_EXHAUSTED` | 422 | Bu şubede son 24 saatte 3 yorum gönderildi | Hayır, otomatik olarak değil | `retryAfterSeconds` ile kalan süreyi göster |
+    | `RATE_LIMITED` | 429 | Teknik hız sınırı aşıldı | Evet, `Retry-After` sonrası | Bekle ve tekrarla |
+    | `INTERNAL_ERROR` | 500 | Beklenmeyen sunucu hatası | Evet, üstel bekleme ile | `X-Request-Id` ile destek |
+
+    İş kuralı retleri (`REWARD_COOLDOWN`, `ATTEMPTS_EXHAUSTED`) bilinçli olarak `429` değil `422`
+    ile döner ve `Retry-After` başlığı taşımaz: HTTP istemcilerinin otomatik tekrar deneme
+    mekanizmaları 429 ve `Retry-After` gördüğünde isteği kendiliğinden yeniden gönderebilir.
+
+    ## Yorum durumunu izleme
+
+    `POST /v1/feedbacks` yanıtından sonra istemci `GET /v1/feedbacks/{feedbackId}` uç noktasını
+    2 saniye aralıklarla, durum `analyzing` olmaktan çıkana kadar en fazla 30 saniye sorgular.
+    Analizlerin %95'i 10 saniye içinde tamamlanır (SRS NFR-PERF-03). 30 saniyenin sonunda durum
+    hâlâ `analyzing` ise istemci sorgulamayı bırakır, yorumu "inceleniyor" olarak gösterir ve
+    durumu kullanıcı ilgili ekranı yeniden açtığında tekrar sorgular. Analiz teknik bir
+    aksaklıkla gecikirse en geç 24 saat içinde sonuçlanır (SRS FR-AI-05, FR-AI-09).
+
+    ## Hız sınırları
+
+    Kimliği doğrulanmış uç noktalarda hız sınırı cihaz anahtarına bağlıdır (SRS FR-QR-06).
+    Kimlik doğrulama öncesi uç noktalarda (`/v1/auth/challenge`, `/v1/auth/register`,
+    `/v1/auth/session`) henüz bir kimlik olmadığından geniş eşikli, IP bazlı sınırlar uygulanır.
+
+    ## Bu sürümde bilinçli olarak bulunmayanlar
+
+    - Kullanıcının veri silme talebi (SRS FR-PRIV-02, US-06): demo kapsamı dışında.
+    - Cihaz anahtarı iptali (SRS FR-AUTH-07) ve ödül iadesi (SRS FR-GAM-07): yönetim işlemleri;
+      MVP'de yönetim script'iyle yapılır, genel API'de yer almaz.
+  contact:
+    name: Geliştirme ekibi
+servers:
+  - url: http://localhost:3000
+    description: Yerel geliştirme ve demo
+  - url: https://staging.example.invalid
+    description: Staging (alan adı müşteriden beklenir, SRS S-21)
+tags:
+  - name: Kimlik
+    description: Formsuz anonim kayıt ve oturum (SRS FR-AUTH, SDD 7.1)
+  - name: Cüzdan
+  - name: Yorum
+    description: QR ile geri bildirim gönderme ve durumunu izleme
+  - name: B2B
+    description: Markaların kendi verilerine erişimi (SRS FR-B2B)
+
+paths:
+  /v1/auth/challenge:
+    post:
+      tags: [Kimlik]
+      operationId: createAuthChallenge
+      summary: Tek kullanımlık challenge al
+      description: |
+        Kayıt ve oturum açma için tek kullanımlık, 60 saniye geçerli bir nonce üretir.
+        Nonce bir kez kullanıldıktan sonra geçersizdir. Bu uç noktada hız sınırı IP bazlıdır
+        (bkz. Hız sınırları).
+      security: []
+      responses:
+        '200':
+          description: Challenge üretildi
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/XRequestId' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Challenge' }
+              example:
+                nonce: 'q0Zx3nV6p1cW8sT2mYkR4aL9eJbH7uDf5gNtVwXyZ0A'
+                expiresAt: '2026-10-12T09:15:30Z'
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  /v1/auth/register:
+    post:
+      tags: [Kimlik]
+      operationId: registerDevice
+      summary: Cihaz anahtarını kaydet, anonim kullanıcı ve cüzdan aç
+      description: |
+        Cihazın güvenli donanımında üretilen anahtarı, platform doğrulamasıyla (iOS App Attest;
+        Android Key Attestation + Play Integrity) kaydeder.
+
+        - Anahtar ilk kez kaydediliyorsa yeni kullanıcı ve cüzdan oluşturulur: `201`.
+        - Anahtar zaten kayıtlıysa mevcut kullanıcı döner: `200` (SRS FR-AUTH-02).
+        - Platform doğrulaması başarısız olursa kayıt reddedilmez; hesap düşük güven modunda
+          açılır ve `trustLevel: low` döner. Bu modda yorum yazılabilir ama ödül kazanılamaz
+          (SRS FR-AUTH-06). İstemci kullanıcıyı bu durum hakkında bilgilendirmelidir.
+
+        Demo ortamında doğrulama `DevAttestationVerifier` ile yapılır; üretimde bu doğrulayıcı açılamaz.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RegisterRequest' }
+            examples:
+              ios:
+                summary: iOS kaydı
+                value:
+                  platform: ios
+                  nonce: 'q0Zx3nV6p1cW8sT2mYkR4aL9eJbH7uDf5gNtVwXyZ0A'
+                  keyId: 'bXlLZXlJZEZyb21BcHBBdHRlc3RTZXJ2aWNl'
+                  attestationObject: 'o2NmbXRvYXBwbGUtYXBwYXR0ZXN0Z2F0dFN0bXSi...'
+              android:
+                summary: Android kaydı
+                value:
+                  platform: android
+                  nonce: 'q0Zx3nV6p1cW8sT2mYkR4aL9eJbH7uDf5gNtVwXyZ0A'
+                  certificateChain:
+                    - 'MIICyTCCAm+gAwIBAgIBATAKBggqhkjOPQQDAjA5...'
+                    - 'MIICMjCCAbegAwIBAgIKFZXoFhRxoqTzHjAKBggq...'
+                  integrityToken: 'eyJhbGciOiJBMjU2S1ciLCJlbmMiOiJBMjU2R0NNIn0...'
+      responses:
+        '200':
+          description: Anahtar zaten kayıtlı; mevcut kullanıcı döndü
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/XRequestId' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Session' }
+        '201':
+          description: Yeni anonim kullanıcı ve cüzdan oluşturuldu
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/XRequestId' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Session' }
+              example:
+                userId: '3f0c2a9e-6b1d-4c7e-9a52-1d2e3f4a5b6c'
+                trustLevel: normal
+                accessToken: 'eyJhbGciOiJFUzI1NiIsImtpZCI6ImsxIn0.eyJzdWIiOiIzZjBjIn0.sig'
+                tokenType: Bearer
+                expiresIn: 900
+                wallet:
+                  xp: 0
+                  points: 0
+                  level: 1
+                  xpForNextLevel: 100
+                  xpToNextLevel: 100
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401':
+          description: Challenge geçersiz, süresi dolmuş veya daha önce kullanılmış (`CHALLENGE_INVALID`)
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/XRequestId' }
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+              example:
+                type: 'https://errors.example.invalid/challenge-invalid'
+                title: Nonce geçersiz, süresi dolmuş veya daha önce kullanılmış
+                status: 401
+                code: CHALLENGE_INVALID
+                requestId: '7d3e1c0a-2b4f-4e8a-9c6d-5f1a2b3c4d5e'
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  /v1/auth/session:
+    post:
+      tags: [Kimlik]
+      operationId: createSession
+      summary: Challenge imzasıyla oturum aç
+      description: |
+        Kayıtlı cihaz anahtarıyla challenge'ı imzalayarak en fazla 15 dakika geçerli bir erişim
+        token'ı alır (SRS FR-AUTH-03). Uzun ömürlü refresh token yoktur; token süresi dolunca
+        challenge alınıp bu uç nokta tekrar çağrılır.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SessionRequest' }
+            examples:
+              ios:
+                value:
+                  platform: ios
+                  keyId: 'bXlLZXlJZEZyb21BcHBBdHRlc3RTZXJ2aWNl'
+                  nonce: 'Zt8bQ1xW3eR5yU7iO9pA2sD4fG6hJ8kL0zX1cV3bN5m'
+                  assertion: 'omlzaWduYXR1cmVYRzBFAiEAy...'
+              android:
+                value:
+                  platform: android
+                  keyId: 'Yz7kQ2mF9xR4tW1vB6nH3jL8pD5sA0gE2cU7iO4yT1q'
+                  nonce: 'Zt8bQ1xW3eR5yU7iO9pA2sD4fG6hJ8kL0zX1cV3bN5m'
+                  signature: 'MEUCIQDx3...'
+      responses:
+        '200':
+          description: Oturum açıldı
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/XRequestId' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Session' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401':
+          description: Challenge geçersiz (`CHALLENGE_INVALID`) veya imza doğrulanamadı (`SIGNATURE_INVALID`)
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/XRequestId' }
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '403':
+          description: Cihaz anahtarı iptal edilmiş (`KEY_REVOKED`)
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/XRequestId' }
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  /v1/me/wallet:
+    get:
+      tags: [Cüzdan]
+      operationId: getMyWallet
+      summary: Cüzdanı görüntüle
+      security:
+        - mobileBearer: []
+      responses:
+        '200':
+          description: Cüzdan
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/XRequestId' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Wallet' }
+              example:
+                xp: 120
+                points: 60
+                level: 2
+                xpForNextLevel: 300
+                xpToNextLevel: 180
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /v1/feedbacks:
+    post:
+      tags: [Yorum]
+      operationId: submitFeedback
+      summary: QR ile yorum gönder
+      description: |
+        Yorumu kaydeder ve analizi beklemeden `202 Accepted` döner; analiz arka planda yapılır.
+
+        **Idempotency:** Her yorum için istemci yeni bir `Idempotency-Key` üretir ve ağ hatasında
+        isteği aynı anahtarla tekrarlar. Aynı anahtar ve aynı gövdeyle gelen istek yeni yorum
+        oluşturmaz, ilk isteğin yanıtını `Idempotent-Replayed: true` başlığıyla döner. Aynı anahtar
+        farklı bir gövdeyle gelirse `422 IDEMPOTENCY_KEY_MISMATCH` döner (SRS FR-AI-10).
+
+        **Platform kanıtı:** `X-Platform-Proof` başlığı, istek gövdesinin SHA-256 özetine bağlı
+        platform kanıtını taşır (iOS: App Attest assertion; Android: Play Integrity token). Başlık
+        eksik veya geçersizse yorum reddedilmez, düşük güven modunda işlenir ve ödül verilmez
+        (SRS FR-QR-10). Bu durum yanıttaki `rewardEligible: false` ile bildirilir.
+
+        **QR:** Uygulama, `https://{alan-adı}/q/{token}` biçimindeki QR bağlantısından token'ı
+        çıkarıp `qrToken` alanında gönderir; başka alan adına ait QR'ları kabul etmez (SDD TZ-16).
+
+        **Uzunluk:** Yorum 20–1.000 karakter olmalıdır (Unicode kod noktası, NFC sonrası).
+        Uzunluk ihlali, genel `VALIDATION_ERROR` yerine her zaman `422 TEXT_TOO_SHORT` veya
+        `422 TEXT_TOO_LONG` döner.
+
+        **Ret sebepleri** (`code`): `QR_INVALID`, `TEXT_TOO_SHORT`, `TEXT_TOO_LONG`,
+        `IDEMPOTENCY_KEY_MISMATCH`, `FEEDBACK_PENDING`, `REWARD_COOLDOWN`, `ATTEMPTS_EXHAUSTED`,
+        `RATE_LIMITED`. Anlamları ve istemci davranışı için hata kataloğuna bakın.
+      security:
+        - mobileBearer: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - name: X-Platform-Proof
+          in: header
+          required: false
+          description: İstek gövdesinin SHA-256 özetine bağlı platform kanıtı (base64)
+          schema:
+            type: string
+            maxLength: 8192
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/FeedbackSubmission' }
+            example:
+              qrToken: 'Kp3vX9qL2mT7wR4yB8nZ1cF6hJ0sD5aE'
+              text: 'Tuvaletler çok kirliydi, sabun da yoktu. Personel ilgisizdi.'
+      responses:
+        '202':
+          description: Yorum kabul edildi, analiz ediliyor
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/XRequestId' }
+            Location:
+              description: Yorum durumunun sorgulanacağı adres
+              schema: { type: string }
+              example: /v1/feedbacks/8a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d
+            Idempotent-Replayed:
+              description: Yanıt, aynı Idempotency-Key ile yapılmış önceki bir isteğe aitse `true`
+              schema: { type: boolean }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/FeedbackAccepted' }
+              example:
+                feedbackId: '8a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d'
+                status: analyzing
+                submittedAt: '2026-10-12T09:14:05Z'
+                rewardEligible: true
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '409':
+          description: Bu şubedeki önceki yorum hâlâ inceleniyor (`FEEDBACK_PENDING`)
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/XRequestId' }
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+              example:
+                type: 'https://errors.example.invalid/feedback-pending'
+                title: Bu kullanıcının bu şubedeki önceki yorumu hâlâ inceleniyor
+                status: 409
+                code: FEEDBACK_PENDING
+                requestId: '0b9c8d7e-6f5a-4b3c-9d2e-1f0a9b8c7d6e'
+        '413':
+          description: İstek gövdesi 8 KB'den büyük (`PAYLOAD_TOO_LARGE`)
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/XRequestId' }
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '422':
+          description: |
+            İş kuralı reddi: `QR_INVALID`, `TEXT_TOO_SHORT`, `TEXT_TOO_LONG`,
+            `IDEMPOTENCY_KEY_MISMATCH`, `REWARD_COOLDOWN`, `ATTEMPTS_EXHAUSTED`.
+            `REWARD_COOLDOWN` ve `ATTEMPTS_EXHAUSTED` yanıtları kalan süreyi gövdedeki
+            `retryAfterSeconds` alanında verir; `Retry-After` başlığı kullanılmaz.
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/XRequestId' }
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+              examples:
+                textTooLong:
+                  value:
+                    type: 'https://errors.example.invalid/text-too-long'
+                    title: Yorum metni izin verilen en fazla uzunluğu aşıyor
+                    status: 422
+                    code: TEXT_TOO_LONG
+                    detail: 'Metin 1.142 karakter; en fazla 1.000 karakter olabilir.'
+                    requestId: '2c3d4e5f-6a7b-4c8d-9e0f-1a2b3c4d5e6f'
+                rewardCooldown:
+                  value:
+                    type: 'https://errors.example.invalid/reward-cooldown'
+                    title: Bu şubede son ödüllü yorumdan bu yana 24 saat geçmedi
+                    status: 422
+                    code: REWARD_COOLDOWN
+                    retryAfterSeconds: 52800
+                    requestId: '3d4e5f6a-7b8c-4d9e-8f0a-1b2c3d4e5f6a'
+                attemptsExhausted:
+                  value:
+                    type: 'https://errors.example.invalid/attempts-exhausted'
+                    title: Bu şubede son 24 saatteki deneme sınırına ulaşıldı
+                    status: 422
+                    code: ATTEMPTS_EXHAUSTED
+                    retryAfterSeconds: 7200
+                    requestId: '5f6a7b8c-9d0e-4f1a-8b2c-3d4e5f6a7b8c'
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  /v1/feedbacks/{feedbackId}:
+    get:
+      tags: [Yorum]
+      operationId: getFeedback
+      summary: Yorumun durumunu, ödülünü ve seviye atlamayı görüntüle
+      description: |
+        Yalnızca yorumun sahibine yanıt verir; başka bir kullanıcının yorumu için `404` döner.
+      security:
+        - mobileBearer: []
+      parameters:
+        - name: feedbackId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Yorum durumu
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/XRequestId' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/FeedbackStatus' }
+              examples:
+                analyzing:
+                  value:
+                    feedbackId: '8a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d'
+                    status: analyzing
+                    submittedAt: '2026-10-12T09:14:05Z'
+                    analyzedAt: null
+                    branch: { id: 'b1c2d3e4-f5a6-4b7c-8d9e-0f1a2b3c4d5e', name: 'Kadıköy Rıhtım' }
+                    reward: null
+                    levelUp: null
+                valid:
+                  value:
+                    feedbackId: '8a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d'
+                    status: valid
+                    submittedAt: '2026-10-12T09:14:05Z'
+                    analyzedAt: '2026-10-12T09:14:09Z'
+                    branch: { id: 'b1c2d3e4-f5a6-4b7c-8d9e-0f1a2b3c4d5e', name: 'Kadıköy Rıhtım' }
+                    reward: { xp: 10, points: 5 }
+                    levelUp: { from: 1, to: 2 }
+                spam:
+                  value:
+                    feedbackId: '8a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d'
+                    status: spam
+                    submittedAt: '2026-10-12T09:14:05Z'
+                    analyzedAt: '2026-10-12T09:14:08Z'
+                    branch: { id: 'b1c2d3e4-f5a6-4b7c-8d9e-0f1a2b3c4d5e', name: 'Kadıköy Rıhtım' }
+                    reward: null
+                    levelUp: null
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /v1/b2b/oauth/token:
+    post:
+      tags: [B2B]
+      operationId: issueB2bToken
+      summary: OAuth2 client credentials ile erişim token'ı al
+      description: |
+        RFC 6749 client credentials akışı. Token 15 dakika geçerlidir. Bir markanın birden fazla
+        istemcisi olabilir; anahtar rotasyonu yeni istemci oluşturulup eskisi iptal edilerek yapılır.
+        Demo ortamında istemciler seed script'iyle tanımlanır.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema: { $ref: '#/components/schemas/B2bTokenRequest' }
+            example:
+              grant_type: client_credentials
+              client_id: 'brand-a-panel'
+              client_secret: 's3cr3t-only-for-demo'
+              scope: 'b2b.feedback.read b2b.summary.read'
+      responses:
+        '200':
+          description: Token üretildi
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/XRequestId' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/B2bToken' }
+              example:
+                access_token: 'eyJhbGciOiJFUzI1NiIsImtpZCI6ImIxIn0.eyJicmFuZF9pZCI6IjEifQ.sig'
+                token_type: Bearer
+                expires_in: 900
+                scope: 'b2b.feedback.read b2b.summary.read'
+        '400':
+          description: Geçersiz istek veya kapsam (RFC 6749 hata biçimi)
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/XRequestId' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OAuthError' }
+              example: { error: invalid_scope }
+        '401':
+          description: İstemci kimliği veya sırrı hatalı, istemci iptal edilmiş ya da süresi dolmuş
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/XRequestId' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OAuthError' }
+              example: { error: invalid_client }
+
+  /v1/b2b/branches:
+    get:
+      tags: [B2B]
+      operationId: listBranches
+      summary: Markanın şubeleri
+      security:
+        - b2bOAuth: [b2b.feedback.read]
+      parameters:
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Şube listesi
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/XRequestId' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BranchPage' }
+              example:
+                items:
+                  - id: 'b1c2d3e4-f5a6-4b7c-8d9e-0f1a2b3c4d5e'
+                    name: 'Kadıköy Rıhtım'
+                    lat: 40.9909
+                    lng: 29.0236
+                nextCursor: null
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /v1/b2b/feedbacks:
+    get:
+      tags: [B2B]
+      operationId: listBrandFeedbacks
+      summary: Yorumları filtreleyip listele
+      description: |
+        Yalnızca geçerli ve analiz edilemeyen (`unanalyzed`) yorumlar döner; spam yorumlar listede
+        yer almaz. Metin yalnızca maskelenmiş haliyle döner; kullanıcıyı tanımlayan hiçbir alan yoktur
+        (SRS FR-B2B-06, FR-B2B-07). Sıralama: en yeni önce.
+      security:
+        - b2bOAuth: [b2b.feedback.read]
+      parameters:
+        - name: branchId
+          in: query
+          required: false
+          description: Başka markaya ait şube verilirse `404` döner (SRS FR-B2B-08)
+          schema: { type: string, format: uuid }
+        - $ref: '#/components/parameters/From'
+        - $ref: '#/components/parameters/To'
+        - $ref: '#/components/parameters/TimeZone'
+        - name: sentiment
+          in: query
+          required: false
+          schema: { $ref: '#/components/schemas/Sentiment' }
+        - name: topicKey
+          in: query
+          required: false
+          schema: { type: string, pattern: '^[a-z][a-z0-9_]*$' }
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Yorum listesi
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/XRequestId' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BrandFeedbackPage' }
+              example:
+                items:
+                  - id: '8a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d'
+                    branchId: 'b1c2d3e4-f5a6-4b7c-8d9e-0f1a2b3c4d5e'
+                    submittedAt: '2026-10-12T09:14:05Z'
+                    status: valid
+                    textMasked: 'Tuvaletler çok kirliydi. Plakası [PLAKA] olan araç pompayı kapattı.'
+                    sentiment: angry
+                    topic: { key: toilet_cleanliness, name: 'Tuvalet temizliği' }
+                nextCursor: 'eyJzIjoiMjAyNi0xMC0xMlQwOToxNDowNVoiLCJpIjoiOGExYiJ9'
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /v1/b2b/branches/{branchId}/summary:
+    get:
+      tags: [B2B]
+      operationId: getBranchSummary
+      summary: Şube özeti
+      description: |
+        Duygu dağılımı, en sık 5 konu ve şikayet sayısı. Şikayet = duygusu `disappointed` veya
+        `angry` olan geçerli yorum (SRS FR-B2B-04). Spam yorumlar sayılmaz.
+      security:
+        - b2bOAuth: [b2b.summary.read]
+      parameters:
+        - name: branchId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - $ref: '#/components/parameters/From'
+        - $ref: '#/components/parameters/To'
+        - $ref: '#/components/parameters/TimeZone'
+      responses:
+        '200':
+          description: Şube özeti
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/XRequestId' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BranchSummary' }
+              example:
+                branchId: 'b1c2d3e4-f5a6-4b7c-8d9e-0f1a2b3c4d5e'
+                from: '2026-10-01T00:00:00+03:00'
+                to: '2026-10-12T00:00:00+03:00'
+                timeZone: Europe/Istanbul
+                totalFeedbacks: 148
+                complaintCount: 41
+                unanalyzedCount: 2
+                sentimentDistribution:
+                  happy: 32
+                  satisfied: 45
+                  neutral: 28
+                  disappointed: 24
+                  angry: 17
+                topTopics:
+                  - { key: toilet_cleanliness, name: 'Tuvalet temizliği', count: 37 }
+                  - { key: wait_time, name: 'Bekleme süresi', count: 29 }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /v1/b2b/heatmap:
+    get:
+      tags: [B2B]
+      operationId: getHeatmap
+      summary: Isı haritası verisi
+      description: |
+        Markanın her şubesi için koordinat ve seçilen aralıktaki yorum ve şikayet sayısı.
+        Görselleştirme markanın panelinde yapılır (SRS FR-B2B-05).
+      security:
+        - b2bOAuth: [b2b.summary.read]
+      parameters:
+        - $ref: '#/components/parameters/From'
+        - $ref: '#/components/parameters/To'
+        - $ref: '#/components/parameters/TimeZone'
+      responses:
+        '200':
+          description: Isı haritası verisi
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/XRequestId' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Heatmap' }
+              example:
+                from: '2026-10-01T00:00:00+03:00'
+                to: '2026-10-12T00:00:00+03:00'
+                timeZone: Europe/Istanbul
+                items:
+                  - branchId: 'b1c2d3e4-f5a6-4b7c-8d9e-0f1a2b3c4d5e'
+                    name: 'Kadıköy Rıhtım'
+                    lat: 40.9909
+                    lng: 29.0236
+                    feedbackCount: 148
+                    complaintCount: 41
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /v1/b2b/topics:
+    get:
+      tags: [B2B]
+      operationId: listTopics
+      summary: Markanın sektörüne ait konu listesi
+      description: Filtrelerde kullanılacak güncel konu anahtarları ve görünen adları.
+      security:
+        - b2bOAuth: [b2b.feedback.read]
+      responses:
+        '200':
+          description: Konu listesi
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/XRequestId' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TopicList' }
+              example:
+                sector: fuel
+                labelSetVersion: 1
+                items:
+                  - { key: toilet_cleanliness, name: 'Tuvalet temizliği' }
+                  - { key: staff_attitude, name: 'Personel tutumu' }
+                  - { key: wait_time, name: 'Bekleme süresi' }
+                  - { key: price, name: 'Fiyat' }
+                  - { key: market_products, name: 'Market ürünleri' }
+                  - { key: pump_equipment, name: 'Pompa/ekipman' }
+                  - { key: other, name: 'Diğer' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+components:
+  securitySchemes:
+    mobileBearer:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: '`/v1/auth/register` veya `/v1/auth/session` ile alınan, en fazla 15 dakika geçerli erişim token''ı'
+    b2bOAuth:
+      type: oauth2
+      flows:
+        clientCredentials:
+          tokenUrl: /v1/b2b/oauth/token
+          scopes:
+            b2b.feedback.read: Şubeleri, yorumları ve konu listesini okuma
+            b2b.summary.read: Şube özetlerini ve ısı haritasını okuma
+
+  headers:
+    XRequestId:
+      description: İsteğin takip kimliği (correlation ID); destek taleplerinde paylaşılır
+      schema: { type: string }
+    RetryAfter:
+      description: Yeniden denemenin mümkün olacağı süre (saniye)
+      schema: { type: integer, minimum: 0 }
+
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: Her yorum için istemcinin ürettiği UUID; tekrar denemelerde aynı değer gönderilir
+      schema: { type: string, format: uuid }
+    Cursor:
+      name: cursor
+      in: query
+      required: false
+      description: Bir önceki sayfanın `nextCursor` değeri; ilk sayfa için gönderilmez
+      schema: { type: string, maxLength: 512 }
+    Limit:
+      name: limit
+      in: query
+      required: false
+      schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+    From:
+      name: from
+      in: query
+      required: false
+      description: |
+        Aralığın başlangıcı (dahil). `2026-10-01` gibi bir tarih verilirse `timeZone` saat dilimindeki
+        günün başlangıcı kabul edilir; `2026-10-01T00:00:00+03:00` gibi zaman damgası verilirse
+        olduğu gibi kullanılır. Verilmezse son 30 gün.
+      schema:
+        type: string
+        pattern: '^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:\d{2}))?$'
+        example: '2026-10-01'
+    To:
+      name: to
+      in: query
+      required: false
+      description: Aralığın sonu (hariç). Biçim kuralları `from` ile aynıdır. Verilmezse şimdiki an.
+      schema:
+        type: string
+        pattern: '^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:\d{2}))?$'
+        example: '2026-10-12T00:00:00+03:00'
+    TimeZone:
+      name: timeZone
+      in: query
+      required: false
+      description: Tarihlerin ve günlük gruplamanın yorumlanacağı IANA saat dilimi (SRS FR-B2B-10)
+      schema: { type: string, default: Europe/Istanbul, example: Europe/Istanbul }
+
+  responses:
+    ValidationError:
+      description: İstek doğrulanamadı (`VALIDATION_ERROR`); hatalı alanlar `errors` dizisinde
+      headers:
+        X-Request-Id: { $ref: '#/components/headers/XRequestId' }
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+          example:
+            type: 'https://errors.example.invalid/validation-error'
+            title: İstek gövdesi veya parametreleri doğrulanamadı
+            status: 400
+            code: VALIDATION_ERROR
+            errors:
+              - { field: qrToken, message: Zorunlu alan eksik }
+            requestId: '4e5f6a7b-8c9d-4e0f-9a1b-2c3d4e5f6a7b'
+    Unauthorized:
+      description: Erişim token'ı eksik, geçersiz veya süresi dolmuş (`UNAUTHORIZED`)
+      headers:
+        X-Request-Id: { $ref: '#/components/headers/XRequestId' }
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    Forbidden:
+      description: Token'ın kapsamı bu uç nokta için yetersiz (`FORBIDDEN`)
+      headers:
+        X-Request-Id: { $ref: '#/components/headers/XRequestId' }
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    NotFound:
+      description: Kaynak bulunamadı veya isteyene ait değil (`NOT_FOUND`)
+      headers:
+        X-Request-Id: { $ref: '#/components/headers/XRequestId' }
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    TooManyRequests:
+      description: Teknik hız sınırı aşıldı (`RATE_LIMITED`); `Retry-After` sonrası tekrar denenebilir
+      headers:
+        X-Request-Id: { $ref: '#/components/headers/XRequestId' }
+        Retry-After: { $ref: '#/components/headers/RetryAfter' }
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+          example:
+            type: 'https://errors.example.invalid/rate-limited'
+            title: İstek hızı sınırı aşıldı
+            status: 429
+            code: RATE_LIMITED
+            retryAfterSeconds: 30
+            requestId: '6a7b8c9d-0e1f-4a2b-8c3d-4e5f6a7b8c9d'
+
+  schemas:
+    Problem:
+      type: object
+      description: RFC 9457 Problem Details ve uygulamaya özgü `code` alanı
+      required: [type, title, status, code, requestId]
+      properties:
+        type: { type: string, format: uri }
+        title:
+          type: string
+          description: Hata türünün geliştiriciye yönelik, sabit açıklaması; kullanıcıya gösterilmez
+        status: { type: integer }
+        detail:
+          type: string
+          description: Bu örneğe özgü, geliştiriciye yönelik ayrıntı; kullanıcıya gösterilmez
+        code: { $ref: '#/components/schemas/ErrorCode' }
+        requestId: { type: string }
+        retryAfterSeconds:
+          type: integer
+          minimum: 0
+          description: Yalnızca `REWARD_COOLDOWN`, `ATTEMPTS_EXHAUSTED` ve `RATE_LIMITED` yanıtlarında; kalan süre (saniye)
+        errors:
+          type: array
+          description: Yalnızca `VALIDATION_ERROR` yanıtlarında
+          items:
+            type: object
+            required: [field, message]
+            properties:
+              field: { type: string }
+              message: { type: string }
+
+    ErrorCode:
+      type: string
+      description: Anlamları, HTTP durumları ve istemci davranışı için API açıklamasındaki hata kataloğuna bakın
+      enum:
+        - VALIDATION_ERROR
+        - UNAUTHORIZED
+        - FORBIDDEN
+        - NOT_FOUND
+        - CHALLENGE_INVALID
+        - SIGNATURE_INVALID
+        - KEY_REVOKED
+        - QR_INVALID
+        - TEXT_TOO_SHORT
+        - TEXT_TOO_LONG
+        - PAYLOAD_TOO_LARGE
+        - IDEMPOTENCY_KEY_MISMATCH
+        - FEEDBACK_PENDING
+        - REWARD_COOLDOWN
+        - ATTEMPTS_EXHAUSTED
+        - RATE_LIMITED
+        - INTERNAL_ERROR
+
+    Challenge:
+      type: object
+      required: [nonce, expiresAt]
+      properties:
+        nonce:
+          type: string
+          description: 32 baytlık rastgele değer (base64url)
+          pattern: '^[A-Za-z0-9_-]{43}$'
+        expiresAt: { type: string, format: date-time }
+
+    RegisterRequest:
+      oneOf:
+        - $ref: '#/components/schemas/RegisterRequestIos'
+        - $ref: '#/components/schemas/RegisterRequestAndroid'
+      discriminator:
+        propertyName: platform
+        mapping:
+          ios: '#/components/schemas/RegisterRequestIos'
+          android: '#/components/schemas/RegisterRequestAndroid'
+
+    RegisterRequestIos:
+      type: object
+      required: [platform, nonce, keyId, attestationObject]
+      additionalProperties: false
+      properties:
+        platform: { const: ios }
+        nonce: { type: string }
+        keyId:
+          type: string
+          description: App Attest anahtar kimliği (base64)
+        attestationObject:
+          type: string
+          description: App Attest attestation nesnesi (base64); clientDataHash = SHA-256(nonce)
+
+    RegisterRequestAndroid:
+      type: object
+      required: [platform, nonce, certificateChain, integrityToken]
+      additionalProperties: false
+      properties:
+        platform: { const: android }
+        nonce: { type: string }
+        certificateChain:
+          type: array
+          description: Key Attestation sertifika zinciri, yaprak sertifika önce (her biri base64 DER); attestationChallenge = nonce
+          minItems: 2
+          maxItems: 10
+          items: { type: string }
+        integrityToken:
+          type: string
+          description: Play Integrity standart istek token'ı; requestHash = SHA-256(nonce + açık anahtar)
+
+    SessionRequest:
+      type: object
+      required: [platform, keyId, nonce]
+      properties:
+        platform: { type: string, enum: [ios, android] }
+        keyId:
+          type: string
+          description: 'iOS: App Attest anahtar kimliği; Android: açık anahtarın SHA-256 özeti (base64url)'
+        nonce: { type: string }
+        assertion:
+          type: string
+          description: 'Yalnızca iOS: nonce üzerinde App Attest assertion (base64)'
+        signature:
+          type: string
+          description: 'Yalnızca Android: nonce''ın Keystore anahtarıyla imzası (base64)'
+      oneOf:
+        - required: [assertion]
+          properties: { platform: { const: ios } }
+        - required: [signature]
+          properties: { platform: { const: android } }
+
+    Session:
+      type: object
+      required: [userId, trustLevel, accessToken, tokenType, expiresIn, wallet]
+      properties:
+        userId: { type: string, format: uuid }
+        trustLevel: { $ref: '#/components/schemas/TrustLevel' }
+        accessToken: { type: string }
+        tokenType: { const: Bearer }
+        expiresIn:
+          type: integer
+          description: Saniye; en fazla 900
+          maximum: 900
+        wallet: { $ref: '#/components/schemas/Wallet' }
+
+    TrustLevel:
+      type: string
+      enum: [normal, low]
+      description: '`low`: platform doğrulaması başarısız; yorum yazılabilir, ödül kazanılamaz'
+
+    Wallet:
+      type: object
+      required: [xp, points, level, xpForNextLevel, xpToNextLevel]
+      properties:
+        xp: { type: integer, minimum: 0, description: Toplam XP; seviye atlayınca sıfırlanmaz }
+        points: { type: integer, description: 'İade (clawback) sonrası negatif olabilir' }
+        level: { type: integer, minimum: 1 }
+        xpForNextLevel:
+          type: integer
+          description: Bir sonraki seviye için gereken toplam XP = 100 × L × (L + 1) / 2 (L = mevcut seviye)
+        xpToNextLevel: { type: integer, minimum: 0 }
+
+    FeedbackSubmission:
+      type: object
+      required: [qrToken, text]
+      additionalProperties: false
+      properties:
+        qrToken:
+          type: string
+          description: QR bağlantısındaki token (en az 128 bit, base64url)
+          pattern: '^[A-Za-z0-9_-]{22,64}$'
+        text:
+          type: string
+          minLength: 20
+          maxLength: 1000
+          description: Yorum metni; 20–1.000 karakter (Unicode kod noktası, NFC sonrası). Uzunluk ihlali `422 TEXT_TOO_SHORT/TEXT_TOO_LONG` döner
+
+    FeedbackStatusValue:
+      type: string
+      enum: [analyzing, valid, spam, unanalyzed]
+      description: |
+        `analyzing`: analiz sürüyor; teknik aksaklıkta denemeler 24 saate kadar sürer ·
+        `valid`: geçerli · `spam`: anlamlı bir geri bildirim bulunmadı ·
+        `unanalyzed`: teknik aksaklık nedeniyle 24 saatte analiz edilemedi ve geçerli sayıldı
+        (SRS FR-AI-09). Kullanıcıya gösterilen metni uygulama bu duruma göre üretir.
+
+    FeedbackAccepted:
+      type: object
+      required: [feedbackId, status, submittedAt, rewardEligible]
+      properties:
+        feedbackId: { type: string, format: uuid }
+        status: { const: analyzing }
+        submittedAt: { type: string, format: date-time }
+        rewardEligible:
+          type: boolean
+          description: '`false` ise yorum düşük güven modunda işlenir ve ödül verilmez'
+
+    FeedbackStatus:
+      type: object
+      required: [feedbackId, status, submittedAt, analyzedAt, branch, reward, levelUp]
+      properties:
+        feedbackId: { type: string, format: uuid }
+        status: { $ref: '#/components/schemas/FeedbackStatusValue' }
+        submittedAt: { type: string, format: date-time }
+        analyzedAt:
+          type: [string, 'null']
+          format: date-time
+        branch:
+          type: object
+          required: [id, name]
+          properties:
+            id: { type: string, format: uuid }
+            name: { type: string }
+        reward:
+          oneOf:
+            - type: 'null'
+            - type: object
+              required: [xp, points]
+              properties:
+                xp: { type: integer }
+                points: { type: integer }
+        levelUp:
+          oneOf:
+            - type: 'null'
+            - type: object
+              required: [from, to]
+              properties:
+                from: { type: integer }
+                to: { type: integer }
+
+    Sentiment:
+      type: string
+      enum: [happy, satisfied, neutral, disappointed, angry]
+      description: 'happy: Mutlu · satisfied: Memnun · neutral: Nötr · disappointed: Hayal kırıklığı · angry: Öfkeli'
+
+    Topic:
+      type: object
+      required: [key, name]
+      properties:
+        key: { type: string, pattern: '^[a-z][a-z0-9_]*$' }
+        name: { type: string }
+
+    B2bTokenRequest:
+      type: object
+      required: [grant_type, client_id, client_secret]
+      properties:
+        grant_type: { const: client_credentials }
+        client_id: { type: string }
+        client_secret: { type: string }
+        scope:
+          type: string
+          description: Boşlukla ayrılmış kapsamlar; verilmezse istemcinin tüm kapsamları
+
+    B2bToken:
+      type: object
+      required: [access_token, token_type, expires_in, scope]
+      properties:
+        access_token: { type: string }
+        token_type: { const: Bearer }
+        expires_in: { type: integer, maximum: 900 }
+        scope: { type: string }
+
+    OAuthError:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+          enum: [invalid_request, invalid_client, invalid_grant, unauthorized_client, unsupported_grant_type, invalid_scope]
+        error_description: { type: string }
+
+    Branch:
+      type: object
+      required: [id, name, lat, lng]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        lat: { type: number, minimum: -90, maximum: 90 }
+        lng: { type: number, minimum: -180, maximum: 180 }
+
+    BranchPage:
+      type: object
+      required: [items, nextCursor]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/Branch' }
+        nextCursor: { type: [string, 'null'] }
+
+    BrandFeedback:
+      type: object
+      required: [id, branchId, submittedAt, status, textMasked, sentiment, topic]
+      additionalProperties: false
+      properties:
+        id: { type: string, format: uuid }
+        branchId: { type: string, format: uuid }
+        submittedAt: { type: string, format: date-time }
+        status:
+          type: string
+          enum: [valid, unanalyzed]
+        textMasked:
+          type: string
+          description: Kişisel verileri maskelenmiş metin; maskelenmemiş metin hiçbir zaman dönmez
+        sentiment:
+          oneOf:
+            - $ref: '#/components/schemas/Sentiment'
+            - type: 'null'
+          description: '`unanalyzed` yorumlarda `null`'
+        topic:
+          oneOf:
+            - $ref: '#/components/schemas/Topic'
+            - type: 'null'
+
+    BrandFeedbackPage:
+      type: object
+      required: [items, nextCursor]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/BrandFeedback' }
+        nextCursor: { type: [string, 'null'] }
+
+    BranchSummary:
+      type: object
+      required: [branchId, from, to, timeZone, totalFeedbacks, complaintCount, unanalyzedCount, sentimentDistribution, topTopics]
+      properties:
+        branchId: { type: string, format: uuid }
+        from: { type: string, format: date-time }
+        to: { type: string, format: date-time }
+        timeZone: { type: string }
+        totalFeedbacks:
+          type: integer
+          description: Geçerli ve analiz edilemeyen yorumların toplamı (spam hariç)
+        complaintCount: { type: integer }
+        unanalyzedCount: { type: integer }
+        sentimentDistribution:
+          type: object
+          required: [happy, satisfied, neutral, disappointed, angry]
+          additionalProperties: false
+          properties:
+            happy: { type: integer }
+            satisfied: { type: integer }
+            neutral: { type: integer }
+            disappointed: { type: integer }
+            angry: { type: integer }
+        topTopics:
+          type: array
+          maxItems: 5
+          items:
+            allOf:
+              - $ref: '#/components/schemas/Topic'
+              - type: object
+                required: [count]
+                properties:
+                  count: { type: integer }
+
+    Heatmap:
+      type: object
+      required: [from, to, timeZone, items]
+      properties:
+        from: { type: string, format: date-time }
+        to: { type: string, format: date-time }
+        timeZone: { type: string }
+        items:
+          type: array
+          items:
+            type: object
+            required: [branchId, name, lat, lng, feedbackCount, complaintCount]
+            properties:
+              branchId: { type: string, format: uuid }
+              name: { type: string }
+              lat: { type: number }
+              lng: { type: number }
+              feedbackCount: { type: integer }
+              complaintCount: { type: integer }
+
+    TopicList:
+      type: object
+      required: [sector, labelSetVersion, items]
+      properties:
+        sector:
+          type: string
+          enum: [fuel, coffee]
+        labelSetVersion: { type: integer }
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/Topic' }
