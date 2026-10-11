@@ -20,6 +20,7 @@ All notable changes to this project are recorded here. The format follows [Keep 
 
 ### Changed
 
+- `docs/07` v1.4: domain code is grouped by aggregate (`domain/<aggregate>/`), use cases live in `application/use-cases/`.
 - Shared kernel review fixes: an aggregate's recorded events can only be taken with the `takeEvents` key from `src/shared-kernel/repository-access.ts` (replaces the public `pullEvents()`), and dependency-cruiser rule `repository-access-only-in-outbound-adapters` limits that import to outbound repository adapters. `InMemoryTable` deep-copies rows on write and read, so changing a saved or loaded object no longer changes stored state.
 - `docs/07` v1.3: `takeEvents` key and `repository-access-only-in-outbound-adapters` rule; in-memory tables copy rows, rows are plain data (checked by repository contract tests); after a successful save the repository sets the instance's version to the stored version (`markSaved`, implemented in S0-04).
 - `docs/07` v1.2: `shared-kernel/adapters/` and `test/support/` folders, `core-does-not-use-shared-adapters` rule.

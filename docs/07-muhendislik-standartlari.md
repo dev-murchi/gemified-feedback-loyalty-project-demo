@@ -8,11 +8,12 @@ Bu doküman, kodun nasıl yazılacağını tanımlar: Clean Architecture katmanl
 
 | Alan | Değer |
 | --- | --- |
-| Sürüm | 1.3 |
+| Sürüm | 1.4 |
 | Dayandığı dokümanlar | SDD v1.1, Alan Modeli v1.0, Test Stratejisi v1.3 |
 | Değişiklik (1.1) | Test aracı Jest yerine Vitest: NestJS 12 yalnızca ESM; Vitest ESM'i doğal olarak destekler; dependency-cruiser'a `shared-kernel-is-pure` kuralı eklendi (shared kernel'i her domain dolaylı olarak içe aktarır) |
 | Değişiklik (1.2) | `shared-kernel/adapters/` (paylaşılan bellek içi UnitOfWork ve sistem saati) ve `test/support/` (FakeClock) eklendi; dependency-cruiser'a `core-does-not-use-shared-adapters` kuralı eklendi |
 | Değişiklik (1.3) | Olay erişim anahtarı (`takeEvents`, `src/shared-kernel/repository-access.ts`) ve `repository-access-only-in-outbound-adapters` kuralı; `InMemoryTable` satırları kopyalar; save sonrası sürüm kuralı (markSaved; uygulama S0-04) |
+| Değişiklik (1.4) | Klasör yapısı: domain aggregate'e göre alt klasörlere ayrılır; application'da `use-cases/` klasörü |
 | Kapsam | `src/` ve `test/` altındaki tüm kod |
 
 **Temel hedefler:**
@@ -42,10 +43,12 @@ src/
   shared-kernel/           # tipli kimlikler, Clock, Result, DomainEvent, DomainError, UnitOfWork (port ve tipler)
     adapters/              # paylaşılan bellek içi UnitOfWork ve sistem saati (saf TypeScript)
   identity/
-    domain/                # aggregate, entity, değer nesnesi, domain servisi, olay, hata
+    domain/
+      <aggregate>/         # aggregate kökü, ona ait entity'ler, değer nesneleri, olaylar ve hatalar (ör. branch/)
+      <ortak>.ts           # birden çok aggregate'in kullandığı değer nesneleri ve domain servisleri (ör. sector.ts)
     application/
       ports/               # driven port arayüzleri
-      <use-case>.ts        # her use case kendi dosyasında
+      use-cases/           # her use case ve open host service uygulaması kendi dosyasında
     adapters/
       inbound/             # http, kuyruk tüketicisi, zamanlanmış iş
       outbound/            # postgres, memory, redis, llm, attestation, crypto
@@ -64,7 +67,7 @@ db/migrations/             # SQL göçleri
 prompts/                   # sürümlü LLM prompt'ları
 ```
 
-**Adlandırma:** Dosyalar `kebab-case`; sınıflar ve tipler `PascalCase`; kod tanımlayıcıları yalnızca Alan Modeli'ndeki ortak dilden (`06`, Bölüm 4). Adapter dosyaları teknolojiyi önek alır: `pg-wallet.repository.ts`, `memory-wallet.repository.ts`, `openai.sentiment-analyzer.ts`.
+**Adlandırma:** Dosyalar `kebab-case`; sınıflar ve tipler `PascalCase`; kod tanımlayıcıları yalnızca Alan Modeli'ndeki ortak dilden (`06`, Bölüm 4). Adapter dosyaları teknolojiyi önek alır: `pg-wallet.repository.ts`, `memory-wallet.repository.ts`, `openai.sentiment-analyzer.ts`. Domain kodu teknik türe göre değil aggregate'e göre gruplanır (`entities/`, `value-objects/` klasörleri kullanılmaz); birlikte değişen kod birlikte durur (Bölüm 7).
 
 ## 4. Taktik DDD Kuralları
 
