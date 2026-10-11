@@ -25,7 +25,7 @@ These rules were set after real friction in the planning chat. Follow them.
 | --- | --- |
 | Requirements | Closed – SRS v1.5 (customer validation pending at demo) |
 | Design | Closed 10 Oct 2026; SDD v1.1 aligned on 11 Oct |
-| **Development** | **Sprint 0 restarted from scratch on 11 Oct 2026. S0-01 done 11 Oct 2026 (CI green, reviewed). S0-02 implemented locally.** |
+| **Development** | **Sprint 0 restarted from scratch on 11 Oct 2026. S0-01 done 11 Oct 2026 (CI green, reviewed). S0-02 done 11 Oct 2026 (CI green, reviewed; contract 0.2.1-demo). Next: S0-03.** |
 
 A first Sprint 0 attempt existed; its code and the git history were removed on purpose on 11 Oct 2026. Do not recreate it.
 
