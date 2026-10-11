@@ -1,0 +1,13 @@
+# API contract lint (S0-02, docs/07 §8).
+extends:
+  - recommended
+
+rules:
+  # Licence terms are not decided yet; they belong to the customer contract.
+  info-license: off
+  # The local demo server is intentional; the real domain is pending (SRS S-21).
+  no-server-example.com: off
+
+apis:
+  main:
+    root: docs/api/openapi.yaml

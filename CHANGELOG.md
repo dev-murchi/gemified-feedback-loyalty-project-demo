@@ -12,9 +12,12 @@ All notable changes to this project are recorded here. The format follows [Keep 
 - S0-01: Docker Compose for PostgreSQL 14 and Redis 7.2 (`noeviction`).
 - S0-01: GitHub Actions workflow running every quality gate and `npm audit --audit-level=high`.
 - `ARCHITECTURE.md` and this changelog.
+- S0-02: API contract lint with Redocly CLI (`npm run contract:lint`, also in CI and `verify`).
+- S0-02: Prism mock server for the API contract (`docker compose --profile mock up -d mock`) and a smoke check that calls all 12 endpoints (`npm run contract:mock:check`).
 
 ### Changed
 
+- API contract 0.2.1-demo: description for the `Cüzdan` tag. No endpoint or schema changes.
 - `docs/07` v1.1 and `docs/04` v1.3: Vitest replaces Jest; `docs/07` adds the `shared-kernel-is-pure` dependency rule.
 
 ### Removed

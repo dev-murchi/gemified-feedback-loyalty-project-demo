@@ -26,6 +26,7 @@ jobs:
       - run: npm run lint
       - run: npm run format:check
       - run: npm run depcruise
+      - run: npm run contract:lint
       - run: npm run test:cov
       - run: npm run test:e2e
       - run: npm audit --audit-level=high

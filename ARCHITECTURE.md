@@ -26,17 +26,27 @@ npm run start:dev        # API with watch mode, http://localhost:3000
 npm run verify           # every quality gate, same as CI
 ```
 
-| Script                                                               | What it does                                                 |
-| -------------------------------------------------------------------- | ------------------------------------------------------------ |
-| `start:dev` / `start` / `start:debug`                                | Run the API through the NestJS CLI                           |
-| `build`, `start:prod`                                                | Compile to `dist/` with `nest build`, run `dist/main.api.js` |
-| `typecheck`                                                          | `tsc --noEmit`                                               |
-| `lint`                                                               | ESLint with the rules below                                  |
-| `format`, `format:check`                                             | Prettier (ignores `docs/` and `CLAUDE.md`)                   |
-| `depcruise`                                                          | Layer and context rules with dependency-cruiser              |
-| `test`, `test:unit`, `test:contract`, `test:integration`, `test:e2e` | Vitest projects                                              |
-| `test:cov`                                                           | Unit and contract tests with the coverage gate               |
-| `verify`                                                             | typecheck, lint, format check, depcruise, coverage, e2e      |
+API contract mock (Prism, port 4010):
+
+```sh
+docker compose --profile mock up -d mock
+npm run contract:mock:check   # calls all 12 endpoints, expects a documented success status
+docker compose --profile mock down
+```
+
+| Script                                                               | What it does                                                           |
+| -------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| `start:dev` / `start` / `start:debug`                                | Run the API through the NestJS CLI                                     |
+| `build`, `start:prod`                                                | Compile to `dist/` with `nest build`, run `dist/main.api.js`           |
+| `typecheck`                                                          | `tsc --noEmit`                                                         |
+| `lint`                                                               | ESLint with the rules below                                            |
+| `format`, `format:check`                                             | Prettier (ignores `docs/` and `CLAUDE.md`)                             |
+| `depcruise`                                                          | Layer and context rules with dependency-cruiser                        |
+| `contract:lint`                                                      | Redocly CLI lint of `docs/api/openapi.yaml`                            |
+| `contract:mock:check`                                                | Smoke check of the Prism mock (`scripts/check-mock.ts`)                |
+| `test`, `test:unit`, `test:contract`, `test:integration`, `test:e2e` | Vitest projects                                                        |
+| `test:cov`                                                           | Unit and contract tests with the coverage gate                         |
+| `verify`                                                             | typecheck, lint, format check, depcruise, contract lint, coverage, e2e |
 
 ## Layout
 
@@ -73,17 +83,18 @@ test/
 
 ## Rules and how they are enforced
 
-| Rule                                                                                                                        | Tool                                                   | Where                      |
-| --------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ | -------------------------- |
-| Domain imports only its own domain and the shared kernel (no packages, no Node built-ins)                                   | dependency-cruiser `domain-is-pure`                    | `.dependency-cruiser.cjs`  |
-| Application imports only its own domain/application, the shared kernel and other contexts' `public/`                        | dependency-cruiser `application-has-no-infrastructure` | `.dependency-cruiser.cjs`  |
-| A context reaches another context only through its `public/` folder                                                         | dependency-cruiser `only-public-across-contexts`       | `.dependency-cruiser.cjs`  |
-| The shared kernel imports nothing outside itself                                                                            | dependency-cruiser `shared-kernel-is-pure`             | `.dependency-cruiser.cjs`  |
-| No circular dependencies                                                                                                    | dependency-cruiser `no-circular`                       | `.dependency-cruiser.cjs`  |
-| Complexity ≤ 9, depth 3, params 3, function ≤ 40 lines (not in tests), file ≤ 300 lines, 1 class per file, no `any`, no `!` | ESLint + typescript-eslint (type-aware)                | `eslint.config.mjs`        |
-| `strict`, `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`, `noImplicitOverride`, `noFallthroughCasesInSwitch`      | TypeScript                                             | `tsconfig.json`            |
-| Domain + application line coverage ≥ 80 %                                                                                   | Vitest coverage (v8)                                   | `vitest.config.ts`         |
-| No high or critical dependency vulnerabilities                                                                              | `npm audit --audit-level=high`                         | `.github/workflows/ci.yml` |
+| Rule                                                                                                                                                | Tool                                                   | Where                      |
+| --------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ | -------------------------- |
+| Domain imports only its own domain and the shared kernel (no packages, no Node built-ins)                                                           | dependency-cruiser `domain-is-pure`                    | `.dependency-cruiser.cjs`  |
+| Application imports only its own domain/application, the shared kernel and other contexts' `public/`                                                | dependency-cruiser `application-has-no-infrastructure` | `.dependency-cruiser.cjs`  |
+| A context reaches another context only through its `public/` folder                                                                                 | dependency-cruiser `only-public-across-contexts`       | `.dependency-cruiser.cjs`  |
+| The shared kernel imports nothing outside itself                                                                                                    | dependency-cruiser `shared-kernel-is-pure`             | `.dependency-cruiser.cjs`  |
+| No circular dependencies                                                                                                                            | dependency-cruiser `no-circular`                       | `.dependency-cruiser.cjs`  |
+| Complexity ≤ 9, depth 3, params 3, function ≤ 40 lines (not in tests), file ≤ 300 lines, 1 class per file, no `any`, no `!`                         | ESLint + typescript-eslint (type-aware)                | `eslint.config.mjs`        |
+| `strict`, `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`, `noImplicitOverride`, `noFallthroughCasesInSwitch`                              | TypeScript                                             | `tsconfig.json`            |
+| Domain + application line coverage ≥ 80 %                                                                                                           | Vitest coverage (v8)                                   | `vitest.config.ts`         |
+| No high or critical dependency vulnerabilities                                                                                                      | `npm audit --audit-level=high`                         | `.github/workflows/ci.yml` |
+| The API contract lints without errors or warnings (`recommended` rules; `info-license` and `no-server-example.com` turned off, reasons in the file) | Redocly CLI                                            | `redocly.yaml`             |
 
 NestJS appears only in `adapters/` and `composition/` (ADR-021); dependency-cruiser fails the build otherwise.
 
@@ -116,9 +127,10 @@ Use cases and ports are plain TypeScript; they are wired into NestJS in `composi
 | Node ≥ 22.22.3                                                            | Required by `@angular-devkit/schematics`, used by `@nestjs/schematics`                                                                                                                     |
 | `postgres:14-alpine`, `redis:7.2-alpine`                                  | Images already available on the development machine. PostgreSQL 14 reaches end of life in November 2026; upgrading is a one-line change. Redis runs with `noeviction` for BullMQ (ADR-011) |
 | dependency-cruiser `shared-kernel-is-pure` (`docs/07` v1.1)               | Every domain imports the shared kernel, so its purity protects all of them                                                                                                                 |
+| Prism runs from the `stoplight/prism:5.15.10` Docker image, not npm       | Prism ≥ 5.15.7 needs Node ≥ 24.14; the image keeps it out of our dependencies and `npm audit`. The image is amd64-only, so it runs under emulation on Apple Silicon                        |
+| Prism started with `-m false`                                             | Prism 5.15.10 crashes in its default multiprocess mode                                                                                                                                     |
 
 ## Known gaps
 
 - The coverage threshold has not yet been seen failing a run: with no domain or application files it reports 0/0 and passes. To be proven in S0-03.
 - Vitest's default transformer may not emit decorator metadata. A NestJS provider that relies on class-based injection inside a Vitest test may need `unplugin-swc`. Factory providers avoid this.
-- The GitHub Actions workflow has not run yet; the same steps pass locally with `npm run verify`.

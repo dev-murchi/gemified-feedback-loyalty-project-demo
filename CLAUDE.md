@@ -25,7 +25,7 @@ These rules were set after real friction in the planning chat. Follow them.
 | --- | --- |
 | Requirements | Closed – SRS v1.5 (customer validation pending at demo) |
 | Design | Closed 10 Oct 2026; SDD v1.1 aligned on 11 Oct |
-| **Development** | **Sprint 0 restarted from scratch on 11 Oct 2026. S0-01 implemented locally, not yet pushed.** |
+| **Development** | **Sprint 0 restarted from scratch on 11 Oct 2026. S0-01 done 11 Oct 2026 (CI green, reviewed). S0-02 implemented locally.** |
 
 A first Sprint 0 attempt existed; its code and the git history were removed on purpose on 11 Oct 2026. Do not recreate it.
 
@@ -40,7 +40,7 @@ A first Sprint 0 attempt existed; its code and the git history were removed on p
 | `docs/06-alan-modeli.md` | **DDD model:** bounded contexts, context map, ubiquitous language (TR↔EN), aggregates, invariants, events, ports, use cases, transaction boundaries |
 | `docs/07-muhendislik-standartlari.md` | **Coding rules:** layers, folder layout, DDD rules, use-case pattern, error handling, quality gates, ESLint + dependency-cruiser config, tests, DoD |
 | `docs/08-sprint-0-backlog.md` | **Work order:** S0-01..S0-15 with done criteria and cut line |
-| `docs/api/openapi.yaml` (0.2.0-demo) | API contract: 12 endpoints, RFC 9457 errors, 17 error codes. Code must match it exactly |
+| `docs/api/openapi.yaml` (0.2.1-demo) | API contract: 12 endpoints, RFC 9457 errors, 17 error codes. Code must match it exactly |
 
 `docs/05-musteri-ozeti.md` (customer summary) does not exist yet; it is S0-15.
 

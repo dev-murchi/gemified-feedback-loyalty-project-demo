@@ -36,5 +36,27 @@ services:
       timeout: 3s
       retries: 10
 
+  # API contract mock (S0-02). Start with: docker compose --profile mock up -d mock
+  mock:
+    image: stoplight/prism:5.15.10
+    platform: linux/amd64 # the image is published for amd64 only
+    profiles: ['mock']
+    # -m false: Prism 5.15.10 crashes in multiprocess mode ("reading 'isPrimary'").
+    command:
+      [
+        'mock',
+        '-m',
+        'false',
+        '-h',
+        '0.0.0.0',
+        '-p',
+        '4010',
+        '/contract/openapi.yaml',
+      ]
+    volumes:
+      - ./docs/api:/contract:ro
+    ports:
+      - '4010:4010'
+
 volumes:
   pgdata:
