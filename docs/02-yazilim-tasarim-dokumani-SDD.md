@@ -9,7 +9,7 @@ Bu doküman, Gereksinim Dokümanı v1.5'teki gereksinimlerin nasıl karşılanac
 | Alan | Değer |
 | --- | --- |
 | Doküman türü | Yazılım Tasarım Dokümanı (SDD) – MVP |
-| Sürüm | 1.1 (11 Ekim 2026: geliştirme başlangıcı; ADR-019..021, alan modeliyle hizalama). 1.0: tasarım aşaması kapanış sürümü, 10 Ekim 2026 |
+| Sürüm | 1.2 (12 Ekim 2026: LEDGER_ENTRIES.xp_total_after; geliştirme sırasında, S0-06). 1.1 (11 Ekim 2026: geliştirme başlangıcı; ADR-019..021, alan modeliyle hizalama). 1.0: tasarım aşaması kapanış sürümü, 10 Ekim 2026 |
 | Dayandığı doküman | Gereksinim Dokümanı (SRS) v1.5 (`01-gereksinim-dokumani-SRS.md`) |
 | İlgili dokümanlar | Tehdit Modeli (`03-tehdit-modeli.md`), Test Stratejisi (`04-test-stratejisi.md`), Alan Modeli (`06-alan-modeli.md`), Mühendislik Standartları (`07-muhendislik-standartlari.md`), Sprint 0 Backlog (`08-sprint-0-backlog.md`) |
 | SDLC aşaması | Geliştirme (Sprint 0) |
@@ -245,6 +245,7 @@ erDiagram
     string entry_type
     int xp_delta
     int points_delta
+    int xp_total_after
     timestamp earned_at
     timestamp created_at
   }
@@ -342,6 +343,7 @@ erDiagram
 - `FEEDBACKS (user_id, idempotency_key)` tekil (FR-AI-10); `user_id`, silme talebinden sonra anonimleştirme için boş bırakılabilir (FR-PRIV-02).
 - `LEDGER_ENTRIES.idempotency_key` tekil; değer işlem türünü içerir: `reward:{feedbackId}`, `clawback:{feedbackId}` (FR-GAM-04, FR-GAM-07). Aynı yorum için ödül ve iade ayrı kayıtlardır.
 - `LEDGER_ENTRIES` yalnızca eklenebilir: uygulamanın veritabanı rolüne bu tabloda UPDATE ve DELETE yetkisi verilmez (FR-GAM-03).
+- `LEDGER_ENTRIES.xp_total_after`, kaydın eklendiği andaki toplam XP'dir. Bir yorumun seviye atlaması (FR-GAM-05) bundan türetilir: önceki seviye `xp_total_after − xp_delta`'dan, yeni seviye `xp_total_after`'dan `LevelPolicy` ile hesaplanır. Kayıt değişmediği için sonuç sonradan değişmez.
 - `WALLETS` ledger'ın hızlı okunan özetidir; ledger kaydıyla aynı transaction'da güncellenir. `level` XP'den türetilir; formül değişirse yeniden hesaplanır.
 - `QR_CODES.token` en az 128 bit rastgelelikte ve tekildir (FR-QR-01).
 - `DEVICE_KEYS.key_identifier` tekildir (iOS: App Attest key ID; Android: açık anahtarın SHA-256 özeti).

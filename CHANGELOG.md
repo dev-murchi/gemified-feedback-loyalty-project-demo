@@ -25,6 +25,10 @@ All notable changes to this project are recorded here. The format follows [Keep 
 
 ### Changed
 
+- `docs/07` v1.8 and `docs/08`: context-specific access keys (`*-access.ts`) with the `context-access-only-in-domain-and-outbound` rule; event routes are registered only in `src/composition/event-routes.ts` and frozen afterwards; the `UserRegistered` → `OpenWallet` wiring moves back into S0-06.
+- SDD v1.2 (development-time change, S0-06): `LEDGER_ENTRIES.xp_total_after` stores the total XP after each entry, so a feedback's level-up (FR-GAM-05) is derived from a fact that never changes; references to SDD v1.1 updated.
+- `docs/07` v1.7: only the ledger idempotency-key constraint, matched by name, becomes `ConcurrencyConflictError`; every other unique violation stays an infrastructure error. `docs/08` S0-11: the PostgreSQL adapter maps only that named constraint.
+- `docs/08`: S0-06 (Gamification) now comes before S0-05 (Identity), owner decision: every user has a wallet from the moment they exist. S0-06 writes the publishers' event contracts first (`UserRegistered`, `FeedbackValidated`, types only); `/v1/me/wallet` and the user + wallet transaction test move to S0-05.
 - S0-04 review: concurrency conflicts are thrown (`ConcurrencyConflictError`) and roll back the unit of work; `retryOnConflict` reruns the whole unit of work once and rethrows a second conflict; repository `save` returns `Promise<void>`. New contract case: a conflict on a later save undoes earlier saves.
 - S0-04 review: `Branch` copies QR code dates in and out; revoking an already revoked code returns ok and stores nothing; the demo loader validates snapshot ids; loader and generator refuse snapshot entries without a definition.
 - `docs/07` v1.6: conflicts are thrown and roll back the unit of work; decisions before the first save; no general try/catch inside a unit of work.

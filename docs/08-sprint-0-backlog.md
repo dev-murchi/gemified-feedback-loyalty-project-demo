@@ -10,7 +10,7 @@ Demo kapsamındaki (SDD 11.1) beş modülün temel özelliklerini, Mühendislik 
 | --- | --- |
 | Başlangıç | 11 Ekim 2026 (sıfırdan) |
 | Zaman kutusu | Demo tarihi proje sahibiyle belirlenir; takım ilk günün sonunda hızını ölçüp kesme çizgisini (Bölüm 4) teyit eder |
-| Dayandığı dokümanlar | SDD v1.1 Bölüm 11, Alan Modeli v1.0, Mühendislik Standartları v1.6, Test Stratejisi v1.3 Bölüm 8 |
+| Dayandığı dokümanlar | SDD v1.2 Bölüm 11, Alan Modeli v1.0, Mühendislik Standartları v1.8, Test Stratejisi v1.3 Bölüm 8 |
 
 ## 2. Büyüklük ve Öncelik
 
@@ -21,14 +21,16 @@ Demo kapsamındaki (SDD 11.1) beş modülün temel özelliklerini, Mühendislik 
 
 Kalemler sırayla ele alınır; sıra, Clean Architecture geliştirme sırasını (ADR-017) izler.
 
+S0-06, S0-05'ten önce yapılır (proje sahibi kararı, 11 Ekim 2026): her kullanıcının var olduğu andan itibaren cüzdanı vardır. Kimlik doğrulamaya bağlı parçalar (`/v1/me/wallet`, kullanıcı ve cüzdanın aynı transaction'da oluştuğu test) S0-05'e taşındı. S0-06, yayıncıların olay sözleşmelerini önce yazar (yalnızca tipler, davranış yok): `src/identity/public/user-registered.ts` (`UserRegistered`) ve `src/feedback/public/feedback-validated.ts` (`FeedbackValidated`). Gamification bunları oradan içe aktarır; S0-05 ve S0-07 tam olarak bu tipleri yayınlar.
+
 | ID | Kalem | Büyüklük | Öncelik | Bağımlılık |
 | --- | --- | --- | --- | --- |
 | S0-01 | Proje iskeleti ve kalite kapıları | M | Must | – |
 | S0-02 | API sözleşmesinin araçla doğrulanması | S | Must | – |
 | S0-03 | Shared kernel | S | Must | S0-01 |
 | S0-04 | Catalog context'i | S | Must | S0-03 |
-| S0-05 | Identity context'i | L | Must | S0-03 |
-| S0-06 | Gamification context'i | M | Must | S0-05 |
+| S0-06 | Gamification context'i | M | Must | S0-03 |
+| S0-05 | Identity context'i | L | Must | S0-03, S0-06 |
 | S0-07 | Feedback context'i | L | Must | S0-04, S0-05, S0-06 |
 | S0-08 | Analysis context'i | L | Must | S0-07 |
 | S0-09 | Insights (B2B) context'i | M | Must | S0-07, S0-08 |
@@ -59,15 +61,15 @@ Kalemler sırayla ele alınır; sıra, Clean Architecture geliştirme sırasın�
 - **İçerik:** `Brand`, `Branch` + `QrCode`, `LabelSet`, `QrToken`; `QrResolver` ve `LabelSetProvider` open host service'leri; bellek içi repository'ler; demo verisi yükleyicisi; `RevokeQrCode`.
 - **Bitiş kriterleri:** FR-QR-01 ve FR-QR-02 testleri; her etiket setinde `other` konusunun bulunduğunu doğrulayan test.
 
-### S0-05 Identity context'i
-
-- **İçerik:** `User` + `DeviceKey`; challenge store (bellek içi); `AttestationVerifier` port'u ve `DevAttestationVerifier` (üretimde açılamaz); `RegisterDevice` (`UserRegistered` yayınlar), `CreateSession`, `AuthenticateRequest`, `PlatformProofVerifier`; ES256 erişim token'ı (adapter); `/v1/auth/*` uç noktaları.
-- **Bitiş kriterleri:** TC-AUTH-01, 02, 04, 08, 09.
-
 ### S0-06 Gamification context'i
 
-- **İçerik:** `Wallet`, ledger kayıtları, `LevelPolicy`; `UserRegistered` ile cüzdan açma, `FeedbackValidated` ile ödül verme; `RewardLookup`; `GetWallet` ve `/v1/me/wallet`.
-- **Bitiş kriterleri:** TC-GAM-01, 04, 05; kullanıcı ve cüzdanın aynı transaction'da oluştuğunu gösteren test.
+- **İçerik:** Yayıncıların olay sözleşmeleri (yalnızca tipler): `src/identity/public/user-registered.ts`, `src/feedback/public/feedback-validated.ts`; `Wallet`, ledger kayıtları, `LevelPolicy`; `UserRegistered` ile cüzdan açma (`OpenWallet`), `FeedbackValidated` ile ödül verme (`AwardReward`); `RewardLookup`; `GetWallet` use case'i; olay yönlendirmeleri (`src/composition/event-routes.ts`: `UserRegistered` → `OpenWallet`, `FeedbackValidated` → `AwardReward`).
+- **Bitiş kriterleri:** TC-GAM-01, 04, 05; bağlanmış composition üzerinden yayınlanan `UserRegistered` olayının aynı unit of work içinde cüzdan açtığını ve `OpenWallet` başarısız olursa her şeyin geri alındığını gösteren test.
+
+### S0-05 Identity context'i
+
+- **İçerik:** `User` + `DeviceKey`; challenge store (bellek içi); `AttestationVerifier` port'u ve `DevAttestationVerifier` (üretimde açılamaz); `RegisterDevice` (`UserRegistered` yayınlar), `CreateSession`, `AuthenticateRequest`, `PlatformProofVerifier`; ES256 erişim token'ı (adapter); `/v1/auth/*` uç noktaları; `/v1/me/wallet`.
+- **Bitiş kriterleri:** TC-AUTH-01, 02, 04, 08, 09; kullanıcı ve cüzdanın aynı transaction'da oluştuğunu gösteren test.
 
 ### S0-07 Feedback context'i
 
@@ -94,7 +96,7 @@ Kalemler sırayla ele alınır; sıra, Clean Architecture geliştirme sırasın�
 
 ### S0-11 PostgreSQL adapter'ları
 
-- **İçerik:** ORM ve migration aracı kararı (ADR-017; S-20 yanıtlanmadığı için varsayılan PostgreSQL); SDD 6.1'e göre migration'lar (`version` ve `request_fingerprint` dahil); tüm repository'lerin PostgreSQL adapter'ları; `ReportingQueries`'in SQL karşılığı.
+- **İçerik:** ORM ve migration aracı kararı (ADR-017; S-20 yanıtlanmadığı için varsayılan PostgreSQL); SDD 6.1'e göre migration'lar (`version` ve `request_fingerprint` dahil); tüm repository'lerin PostgreSQL adapter'ları; `ReportingQueries`'in SQL karşılığı. Ledger idempotency anahtarının benzersizlik kısıtı adlandırılır (ör. `ledger_entries_idempotency_key_uq`); PostgreSQL adapter'ı yalnızca bu kısıt adını `ConcurrencyConflictError`'a çevirir, başka hiçbir `unique_violation`'ı çevirmez (07 Bölüm 6).
 - **Bitiş kriterleri:** Repository sözleşme testlerinin tamamı PostgreSQL'e karşı geçiyor (Testcontainers). TC-QR-01 eşzamanlılık testi gerçek veritabanında geçiyor. ORM kararı ADR olarak kayıtlı.
 
 ### S0-12 Uçtan uca ve sözleşme testleri

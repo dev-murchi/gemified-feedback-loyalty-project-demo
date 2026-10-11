@@ -8,14 +8,16 @@ Bu doküman, kodun nasıl yazılacağını tanımlar: Clean Architecture katmanl
 
 | Alan | Değer |
 | --- | --- |
-| Sürüm | 1.6 |
-| Dayandığı dokümanlar | SDD v1.1, Alan Modeli v1.0, Test Stratejisi v1.3 |
+| Sürüm | 1.8 |
+| Dayandığı dokümanlar | SDD v1.2, Alan Modeli v1.0, Test Stratejisi v1.3 |
 | Değişiklik (1.1) | Test aracı Jest yerine Vitest: NestJS 12 yalnızca ESM; Vitest ESM'i doğal olarak destekler; dependency-cruiser'a `shared-kernel-is-pure` kuralı eklendi (shared kernel'i her domain dolaylı olarak içe aktarır) |
 | Değişiklik (1.2) | `shared-kernel/adapters/` (paylaşılan bellek içi UnitOfWork ve sistem saati) ve `test/support/` (FakeClock) eklendi; dependency-cruiser'a `core-does-not-use-shared-adapters` kuralı eklendi |
 | Değişiklik (1.3) | Olay erişim anahtarı (`takeEvents`, `src/shared-kernel/repository-access.ts`) ve `repository-access-only-in-outbound-adapters` kuralı; `InMemoryTable` satırları kopyalar; save sonrası sürüm kuralı (markSaved; uygulama S0-04) |
 | Değişiklik (1.4) | Klasör yapısı: domain aggregate'e göre alt klasörlere ayrılır; application'da `use-cases/` klasörü |
 | Değişiklik (1.5) | Sürüm 0 kuralı (hiç saklanmamış aggregate; satır yoksa insert); `adapters/inbound/demo/` klasörü ve `demo-data-only-from-composition` kuralı |
 | Değişiklik (1.6) | Çakışma hata olarak fırlatılır (`ConcurrencyConflictError`) ve unit of work'ü geri alır; kararlar ilk save'den önce verilir; unit of work içinde hatalar genel try/catch ile yutulmaz |
+| Değişiklik (1.7) | Ledger idempotency anahtarı kısıtı adıyla eşleştirilip `ConcurrencyConflictError`'a çevrilir; diğer benzersizlik ihlalleri altyapı hatası olarak kalır |
+| Değişiklik (1.8) | Context'e özgü erişim anahtarları (`*-access.ts`) ve `context-access-only-in-domain-and-outbound` kuralı; olay yönlendirmeleri yalnızca `src/composition/event-routes.ts` dosyasında, kayıttan sonra dondurulur |
 | Kapsam | `src/` ve `test/` altındaki tüm kod |
 
 **Temel hedefler:**
@@ -80,6 +82,8 @@ prompts/                   # sürümlü LLM prompt'ları
 - İki fabrika metodu vardır: `create` (yeni nesne, kuralları uygular ve olay üretir) ve `reconstitute` (kalıcı veriden yükleme, olay üretmez).
 - Durum değiştiren metotlar ürettikleri domain olaylarını kaydeder; olaylar unit of work tamamlanırken yayınlanır.
 - Kaydedilen olayları yalnızca outbound repository adapter'ları alır (`aggregate[takeEvents]()`). Anahtar `src/shared-kernel/repository-access.ts` dosyasındadır; başka bir yerden içe aktarılması dependency-cruiser ile engellenir. Böylece olaylar `save` dışında kaybolamaz.
+- Bir aggregate'e özgü erişim anahtarları (ör. `takeNewLedgerEntries`) context'in domain klasöründe `*-access.ts` dosyasında durur; yalnızca aynı context'in domain'i ve outbound adapter'ları içe aktarabilir.
+- Olay yönlendirmeleri yalnızca `src/composition/event-routes.ts` dosyasında kaydedilir; router kayıttan sonra dondurulur, dondurulduktan sonra kayıt veya aynı olay tipinin ikinci kaydı hata fırlatır.
 - Başka aggregate'lere yalnızca kimlikle referans verilir.
 - Aggregate'ler küçük tutulur; sınırsız büyüyen koleksiyonlar (örneğin ledger geçmişi) aggregate'e yüklenmez.
 - Her aggregate bir `version` taşır; eşzamanlılık iyimser kilitle korunur (ADR-019).
@@ -130,6 +134,7 @@ export class SubmitFeedback {
 - Biçim doğrulaması (eksik alan, yanlış tip) inbound adapter'da yapılır ve `VALIDATION_ERROR` döner. Anlam doğrulaması (metin uzunluğu, QR geçerliliği) değer nesnelerinde ve aggregate'lerde yapılır ve kendi kodunu döner.
 - `null` bir hatayı ifade etmek için kullanılmaz.
 - Eşzamanlılık çakışması bir domain hatası değildir ve hiçbir `Result` tipinde yer almaz; API hata kataloğu değişmez.
+- Benzersizlik kısıtı ihlalleri altyapı hatasıdır ve fırlatılır. Tek istisna ledger idempotency anahtarının kısıtıdır (`LEDGER_ENTRIES.idempotency_key`): yalnızca bu kısıt, **adıyla eşleştirilerek** `ConcurrencyConflictError`'a çevrilir; unit of work geri alınır, `retryOnConflict` tekrarlar ve tekrar `ok` döner. Repository, ledger kaydını eklemeden önce cüzdan sürümünü kontrol eder; kısıt yine de tetiklenirse anahtarla birlikte bir uyarı loglanır. Diğer benzersizlik ihlalleri (ör. QR token, G-3) hiçbir zaman çakışmaya çevrilmez.
 - Unit of work içinde (use case işi veya senkron olay işleyicisi) hatalar genel bir try/catch ile yutulmaz; yakalanan bir `ConcurrencyConflictError` unit of work'ün commit edilmesine yol açar.
 
 ## 7. Cyclomatic Complexity ve Cohesion
@@ -209,6 +214,9 @@ forbidden: [
   { name: 'demo-data-only-from-composition', severity: 'error',
     from: { pathNot: ['^src/composition/', '^src/[^/]+/adapters/inbound/demo/'] },
     to: { path: '^src/[^/]+/adapters/inbound/demo/' } },
+  { name: 'context-access-only-in-domain-and-outbound', severity: 'error',
+    from: { path: '^src/', pathNot: ['^src/[^/]+/domain/', '^src/[^/]+/adapters/outbound/'] },
+    to: { path: '^src/[^/]+/domain/.+-access\\.ts$' } },
 ]
 ```
 
