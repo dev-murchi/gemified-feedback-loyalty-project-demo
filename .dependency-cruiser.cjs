@@ -44,6 +44,17 @@ module.exports = {
       from: { path: '^src/shared-kernel/' },
       to: { pathNot: '^src/shared-kernel/' },
     },
+    {
+      name: 'core-does-not-use-shared-adapters',
+      severity: 'error',
+      from: {
+        path: [
+          '^src/[^/]+/(domain|application)/',
+          '^src/shared-kernel/(?!adapters/)',
+        ],
+      },
+      to: { path: '^src/shared-kernel/adapters/' },
+    },
   ],
   options: {
     doNotFollow: { path: 'node_modules' },

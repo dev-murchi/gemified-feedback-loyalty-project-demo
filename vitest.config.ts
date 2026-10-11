@@ -8,7 +8,11 @@ export default defineConfig({
     passWithNoTests: true,
     coverage: {
       provider: 'v8',
-      include: ['src/*/domain/**/*.ts', 'src/*/application/**/*.ts'],
+      include: [
+        'src/shared-kernel/**/*.ts',
+        'src/*/domain/**/*.ts',
+        'src/*/application/**/*.ts',
+      ],
       thresholds: { lines: 80 },
       reporter: ['text', 'lcov'],
     },

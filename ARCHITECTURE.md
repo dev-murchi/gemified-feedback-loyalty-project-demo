@@ -57,7 +57,12 @@ src/
   main.api.ts              # API entry point
   composition/
     app.module.ts          # composition root (NestJS)
+  shared-kernel/           # Result, typed ids, Clock, IdGenerator, DomainEvent, DomainError,
+                           # ConcurrencyConflict, AggregateRoot, UnitOfWork, event routing, outbox record
+    adapters/              # InMemoryTable, InMemoryUnitOfWork, SystemClock, RandomIdGenerator
 test/
+  support/                 # FakeClock, SequentialIdGenerator
+  unit/shared-kernel/
   e2e/                     # HTTP-level tests
 ```
 
@@ -65,7 +70,8 @@ Target (`docs/07` §3). Each context's folders are created when that context is 
 
 ```
 src/
-  shared-kernel/           # typed ids, Clock, Result, DomainEvent, DomainError, UnitOfWork
+  shared-kernel/           # ports and types
+    adapters/              # shared in-memory adapters (plain TypeScript)
   <context>/               # identity, catalog, feedback, analysis, gamification, insights
     domain/
     application/
@@ -78,8 +84,20 @@ src/
   main.api.ts
   main.worker.ts           # S0-10
 test/
-  unit/<context>/  contract/  integration/  e2e/
+  support/  unit/<context>/  contract/  integration/  e2e/
 ```
+
+## Unit of work and domain events
+
+How a state change and its consequences end up in one transaction (ADR-014, ADR-020):
+
+1. A use case calls `uow.run(async () => { … })`.
+2. An aggregate method records an event (`recordEvent`).
+3. The repository's `save` writes the row and hands the aggregate's events to the unit of work (`EventCollector.collect`).
+4. When the work finishes, each event is looked up in the routing table built in `composition/`: synchronous handlers run inside the same transaction; outbox-routed events (`FeedbackSubmitted`) become outbox records. An event without a route fails the transaction.
+5. If anything throws, every change is undone, outbox included.
+
+`InMemoryUnitOfWork` runs one unit of work at a time and restores `InMemoryTable` snapshots on failure. A handler must never call `uow.run` itself: it is already inside a run, and the in-memory version would wait on itself. In-memory tables store plain rows, not live aggregate objects.
 
 ## Rules and how they are enforced
 
@@ -89,10 +107,11 @@ test/
 | Application imports only its own domain/application, the shared kernel and other contexts' `public/`                                                | dependency-cruiser `application-has-no-infrastructure` | `.dependency-cruiser.cjs`  |
 | A context reaches another context only through its `public/` folder                                                                                 | dependency-cruiser `only-public-across-contexts`       | `.dependency-cruiser.cjs`  |
 | The shared kernel imports nothing outside itself                                                                                                    | dependency-cruiser `shared-kernel-is-pure`             | `.dependency-cruiser.cjs`  |
+| Domain, application and the shared kernel's ports never import `shared-kernel/adapters/`                                                            | dependency-cruiser `core-does-not-use-shared-adapters` | `.dependency-cruiser.cjs`  |
 | No circular dependencies                                                                                                                            | dependency-cruiser `no-circular`                       | `.dependency-cruiser.cjs`  |
 | Complexity ≤ 9, depth 3, params 3, function ≤ 40 lines (not in tests), file ≤ 300 lines, 1 class per file, no `any`, no `!`                         | ESLint + typescript-eslint (type-aware)                | `eslint.config.mjs`        |
 | `strict`, `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`, `noImplicitOverride`, `noFallthroughCasesInSwitch`                              | TypeScript                                             | `tsconfig.json`            |
-| Domain + application line coverage ≥ 80 %                                                                                                           | Vitest coverage (v8)                                   | `vitest.config.ts`         |
+| Shared kernel + domain + application line coverage ≥ 80 %                                                                                           | Vitest coverage (v8)                                   | `vitest.config.ts`         |
 | No high or critical dependency vulnerabilities                                                                                                      | `npm audit --audit-level=high`                         | `.github/workflows/ci.yml` |
 | The API contract lints without errors or warnings (`recommended` rules; `info-license` and `no-server-example.com` turned off, reasons in the file) | Redocly CLI                                            | `redocly.yaml`             |
 
@@ -101,7 +120,7 @@ NestJS appears only in `adapters/` and `composition/` (ADR-021); dependency-crui
 ## Tests
 
 - Vitest with globals enabled. Four projects in `vitest.config.ts`: `unit`, `contract` and `integration` run `test/<level>/**/*.spec.ts`; `e2e` runs `test/e2e/**/*.e2e-spec.ts`.
-- Coverage is measured only on `src/*/domain` and `src/*/application`.
+- Coverage is measured only on `src/shared-kernel`, `src/*/domain` and `src/*/application`.
 - Fakes, not mocks, for ports; `FakeClock` for time; Given / When / Then (`docs/07` §9).
 
 ## NestJS CLI conventions
@@ -132,5 +151,4 @@ Use cases and ports are plain TypeScript; they are wired into NestJS in `composi
 
 ## Known gaps
 
-- The coverage threshold has not yet been seen failing a run: with no domain or application files it reports 0/0 and passes. To be proven in S0-03.
 - Vitest's default transformer may not emit decorator metadata. A NestJS provider that relies on class-based injection inside a Vitest test may need `unplugin-swc`. Factory providers avoid this.

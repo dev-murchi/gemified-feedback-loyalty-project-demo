@@ -14,9 +14,13 @@ All notable changes to this project are recorded here. The format follows [Keep 
 - `ARCHITECTURE.md` and this changelog.
 - S0-02: API contract lint with Redocly CLI (`npm run contract:lint`, also in CI and `verify`).
 - S0-02: Prism mock server for the API contract (`docker compose --profile mock up -d mock`) and a smoke check that calls all 12 endpoints (`npm run contract:mock:check`).
+- S0-03: Shared kernel: `Result` with `map`/`andThen`, branded typed ids (`UserId`, `BrandId`, `BranchId`, `FeedbackId`), `Clock` and `IdGenerator` ports, `DomainEvent`, `DomainError`, `ConcurrencyConflict`, `AggregateRoot`, the `UnitOfWork` port with event routing and outbox records.
+- S0-03: `InMemoryUnitOfWork` and `InMemoryTable`: synchronous event handlers in the same unit of work, outbox records for outbox-routed events, full rollback on any failure; `SystemClock`, `RandomIdGenerator`; test support `FakeClock` and `SequentialIdGenerator`.
+- S0-03: dependency-cruiser rule `core-does-not-use-shared-adapters`; coverage gate now includes the shared kernel.
 
 ### Changed
 
+- `docs/07` v1.2: `shared-kernel/adapters/` and `test/support/` folders, `core-does-not-use-shared-adapters` rule.
 - API contract 0.2.1-demo: description for the `Cüzdan` tag. No endpoint or schema changes.
 - `docs/07` v1.1 and `docs/04` v1.3: Vitest replaces Jest; `docs/07` adds the `shared-kernel-is-pure` dependency rule.
 
