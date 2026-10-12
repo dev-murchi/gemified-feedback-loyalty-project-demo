@@ -11,15 +11,16 @@ Backend for a **gamified, AI-assisted feedback and loyalty engine** for physical
 These rules were set after real friction in the planning chat. Follow them.
 
 - **Two hats:** act as a senior software engineer teammate *and* as the real project owner/customer when a product question comes up. Say which hat you are wearing.
-- **One decision at a time.** Do not batch several decisions into one message.
-- **Do not change docs or files without explicit approval.** Propose, then wait.
+- **Decisions:** routine technical choices (naming, file layout, test design, library-internal details, refactors that keep behaviour) you decide yourself and list at the end of the report. Ask the owner only about: money and points rules; security, identity and personal data; customer-visible behaviour (API contract, error codes, messages shown to users). Ask those one at a time. One review round per slice.
+- **Always needs the owner:** docs edits, downloads (`npm install`, `docker pull`, launching apps), and git (never `add`, `commit`, `push`, `tag`, `restore`; give the commands).
+- **Do not change docs without explicit approval.** Propose the text, then wait.
 - **Do not decide for the user and never close an SDLC phase unless asked.** (Earlier the design phase was closed prematurely: "kapat demedim" = "I didn't say close it".)
 - **Short messages.** State uncertainty honestly; never overstate what was verified (e.g. counts, test results).
 - **Git:** never commit, push, tag or `git restore` on your own. Give the commands; Murat runs them. Conventional Commits, trunk-based.
 - Murat wants to **learn** the architecture (he hasn't coded for a while): explain *why* briefly when introducing a pattern.
 - Avoid "amateur" shortcuts he rejected before: IP-only rate limits, shared device secrets, SQL holding business rules, design depth beyond the demo goal.
 - **One module at a time.** Never build several modules together; finish one, show it, get the go-ahead. Large backlog items (size L, or M with many parts) are planned as committable slices.
-- **Before writing code:** propose a Conventional Commits message for anything pending, then ask "shall I start?" and wait. An approved plan or decision is not a go-ahead.
+- **A new backlog item:** present the plan (slices and decisions for the owner) and wait for approval. Slices of an approved plan: start without asking; one review round at the end of each slice.
 - **Commit messages never contain a `Co-Authored-By:` (or any attribution) line.**
 - **Ask before downloads or launching apps** (`npm install`, `docker pull`, opening Docker Desktop, …); never reopen an app Murat closed.
 - **Reviews:** Murat reviews each step and often sends review findings (HIGH/MEDIUM/LOW); fix them before the commit. Show real `npm run verify` output under Node 22, never a summary of a run that did not happen.

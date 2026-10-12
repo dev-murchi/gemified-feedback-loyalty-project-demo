@@ -93,6 +93,7 @@ S0-06, S0-05'ten önce yapılır (proje sahibi kararı, 11 Ekim 2026): her kulla
 - **İçerik:** Outbox aktarıcısı; `JobQueue` port'u ve BullMQ adapter'ı; ayrı worker süreci (`main.worker.ts`); süpürücü zamanlanmış iş (FR-AI-09).
 - **Bitiş kriterleri:** API ve worker ayrı süreçlerken bir yorum uçtan uca analiz edilip ödüllendiriliyor.
 - **Should:** Redis challenge store'u; GCRA hız sınırlayıcı (ADR-016). Demo tek API süreciyle yapılacağı için bellek içi challenge store yeterlidir.
+- **Risk:** Challenge uç noktası için hız sınırlama (IP bazlı, kimlik doğrulama öncesi) yapılana kadar yalnızca bellek içi üst sınır korur (`MemoryChallengeStore`: bekleyen 10.000 challenge, sonrası `429 RATE_LIMITED`). Ödünleşim: bir saldırı, meşru challenge isteklerini 60 saniyeye kadar engelleyebilir; S0-10'daki IP başına sınırlama bunu ortadan kaldırır.
 
 ### S0-11 PostgreSQL adapter'ları
 

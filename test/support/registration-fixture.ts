@@ -74,6 +74,10 @@ export async function registrationFixture(
     }),
     authenticateRequest: new AuthenticateRequest({ tokens }),
     tokens,
-    issueNonce: async () => (await createChallenge.execute()).nonce,
+    issueNonce: async () => {
+      const created = await createChallenge.execute();
+      if (!created.ok) throw new Error('challenge store is full');
+      return created.value.nonce;
+    },
   };
 }

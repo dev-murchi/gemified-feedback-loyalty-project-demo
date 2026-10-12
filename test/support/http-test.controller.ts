@@ -26,6 +26,11 @@ export class HttpTestController {
     throw new ProblemException('REWARD_COOLDOWN', { retryAfterSeconds: 3600 });
   }
 
+  @Get('limited')
+  limited(): never {
+    throw new ProblemException('RATE_LIMITED', { retryAfterSeconds: 30 });
+  }
+
   @Get('invalid')
   invalid(): never {
     throw ProblemException.from({

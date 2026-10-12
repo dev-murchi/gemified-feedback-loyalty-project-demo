@@ -32,9 +32,20 @@ const fieldOf = (error: DomainError): string | undefined => {
   return typeof field === 'string' ? field : undefined;
 };
 
+const retryAfterOf = (error: DomainError): number | undefined => {
+  const seconds = (error as { retryAfterSeconds?: unknown }).retryAfterSeconds;
+  return typeof seconds === 'number' ? seconds : undefined;
+};
+
 function extrasOf(error: DomainError): ProblemExtras {
   const field = fieldOf(error);
-  if (error.code !== 'VALIDATION_ERROR' || field === undefined) return {};
-  const errors: FieldError[] = [{ field, message: 'invalid value' }];
-  return { errors };
+  const retryAfterSeconds = retryAfterOf(error);
+  const errors: FieldError[] | undefined =
+    error.code === 'VALIDATION_ERROR' && field !== undefined
+      ? [{ field, message: 'invalid value' }]
+      : undefined;
+  return {
+    ...(errors === undefined ? {} : { errors }),
+    ...(retryAfterSeconds === undefined ? {} : { retryAfterSeconds }),
+  };
 }

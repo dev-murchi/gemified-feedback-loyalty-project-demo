@@ -50,6 +50,14 @@ describe('platform HTTP defaults (e2e)', () => {
       expect(response.headers['retry-after']).toBeUndefined();
     });
 
+    it('sends Retry-After with a RATE_LIMITED problem, equal to retryAfterSeconds', async () => {
+      const response = await http().get('/test/limited');
+
+      expect(response.status).toBe(429);
+      expect(response.headers['retry-after']).toBe('30');
+      expect(problemOf(response).retryAfterSeconds).toBe(30);
+    });
+
     it('lists the invalid field of a validation error', async () => {
       const response = await http().get('/test/invalid');
 
@@ -141,6 +149,14 @@ describe('platform HTTP defaults (e2e)', () => {
       expect(response.status).toBe(201);
       expect(response.body).toEqual(body);
     });
+  });
+
+  it('does not announce the framework in a header (T-I7)', async () => {
+    const ok = await http().post('/test/echo').send({});
+    const failed = await http().get('/test/boom');
+
+    expect(ok.headers['x-powered-by']).toBeUndefined();
+    expect(failed.headers['x-powered-by']).toBeUndefined();
   });
 
   describe('request id', () => {

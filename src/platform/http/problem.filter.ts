@@ -45,6 +45,13 @@ export class ProblemFilter implements ExceptionFilter {
   catch(exception: unknown, host: ArgumentsHost): void {
     const response = host.switchToHttp().getResponse<Response>();
     const problem = this.#problemFor(exception, requestIdOf(response));
+    // Only a technical rate limit carries Retry-After; business rejections (422) must not, because
+    // HTTP clients retry on it by themselves.
+    if (
+      problem.code === 'RATE_LIMITED' &&
+      problem.retryAfterSeconds !== undefined
+    )
+      response.setHeader('Retry-After', String(problem.retryAfterSeconds));
     response
       .status(problem.status)
       .type('application/problem+json')

@@ -34,7 +34,13 @@ export default defineConfig({
       },
       {
         extends: true,
-        test: { name: 'e2e', include: ['test/e2e/**/*.e2e-spec.ts'] },
+        test: {
+          name: 'e2e',
+          include: ['test/e2e/**/*.e2e-spec.ts'],
+          // Bundles docs/api/openapi.yaml once; every e2e response is checked against it.
+          globalSetup: ['test/e2e/global-setup.ts'],
+          setupFiles: ['test/e2e/setup.ts'],
+        },
       },
     ],
   },

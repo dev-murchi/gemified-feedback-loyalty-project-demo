@@ -21,6 +21,8 @@ export function configureHttp(
   app: NestExpressApplication,
   deps: HttpDefaultsDeps,
 ): void {
+  // Express announces itself in `X-Powered-By` by default; the API reveals nothing about its stack (T-I7).
+  app.disable('x-powered-by');
   app.use(requestIdMiddleware(deps.ids));
   app.useBodyParser('json', { limit: MAX_BODY });
   app.useGlobalFilters(new ProblemFilter(deps.logger));
