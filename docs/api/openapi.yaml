@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Geri Bildirim ve Sadakat Motoru API
-  version: 0.2.3-demo
+  version: 0.2.4-demo
   description: |
     Demo (Sprint 0) kapsamındaki uç noktaların sözleşmesi. Bu dosya, backend ile Flutter
     ekibi arasındaki anlaşmanın kaynağıdır (SDD ADR-006); uygulamanın ürettiği OpenAPI
@@ -230,6 +230,10 @@ paths:
         Kayıtlı cihaz anahtarıyla challenge'ı imzalayarak en fazla 15 dakika geçerli bir erişim
         token'ı alır (SRS FR-AUTH-03). Uzun ömürlü refresh token yoktur; token süresi dolunca
         challenge alınıp bu uç nokta tekrar çağrılır.
+
+        - Kayıtlı olmayan bir `keyId`, geçersiz imza ile aynı yanıtı verir (`SIGNATURE_INVALID`);
+          anahtarın var olup olmadığı imzasını kanıtlamayan istek için öğrenilemez. İptal edilmiş
+          anahtar (`KEY_REVOKED`), imza doğrulandıktan sonra bildirilir (SRS FR-AUTH-07).
       security: []
       requestBody:
         required: true
@@ -989,10 +993,16 @@ components:
         nonce: { type: string }
         assertion:
           type: string
-          description: 'Yalnızca iOS: nonce üzerinde App Attest assertion (base64)'
+          description: >-
+            Yalnızca iOS: nonce üzerinde App Attest assertion (base64).
+            **Geliştirme modu** (yalnızca geliştirme doğrulayıcısı anlar; üretimde kapalıdır):
+            ASN.1 DER ES256 imzasının standart base64'ü. İmzalayıcıya verilen mesaj, SHA-256(nonce'ın UTF-8 baytları) değerinin 32 baytıdır; imzalayıcı bunu her zamanki gibi bir kez daha hash'ler. Ham r‖s (64 bayt) reddedilir (`SIGNATURE_INVALID`). Geliştirme modunda
+            sayaç kullanılmaz.
         signature:
           type: string
-          description: 'Yalnızca Android: nonce''ın Keystore anahtarıyla imzası (base64)'
+          description: >-
+            Yalnızca Android: nonce'ın Keystore anahtarıyla imzası (base64).
+            **Geliştirme modu:** `assertion` ile aynı kural: ASN.1 DER ES256 imzasının standart base64'ü. İmzalayıcıya verilen mesaj, SHA-256(nonce'ın UTF-8 baytları) değerinin 32 baytıdır; imzalayıcı bunu her zamanki gibi bir kez daha hash'ler. Ham r‖s reddedilir.
       oneOf:
         - required: [assertion]
           properties: { platform: { const: ios } }

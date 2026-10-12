@@ -9,7 +9,7 @@ Bu doküman, SDD'deki mimariyi Domain-Driven Design ile kodlanabilir hale getiri
 | Alan | Değer |
 | --- | --- |
 | Sürüm | 1.1 |
-| Dayandığı dokümanlar | SRS v1.5, SDD v1.2, API sözleşmesi 0.2.3-demo |
+| Dayandığı dokümanlar | SRS v1.5, SDD v1.2, API sözleşmesi 0.2.4-demo |
 | Değişiklik (1.1) | Olay tiplerinin yeri: domain/events/, public/ yalnızca yeniden dışa aktarır |
 
 ## 2. Bounded Context'ler
