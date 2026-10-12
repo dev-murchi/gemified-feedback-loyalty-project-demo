@@ -2,11 +2,17 @@ import { AggregateRoot } from '../../../../shared-kernel/aggregate-root.js';
 import type { Clock } from '../../../../shared-kernel/clock.js';
 import type { IdGenerator } from '../../../../shared-kernel/id-generator.js';
 import { UserId } from '../../../../shared-kernel/ids.js';
+import { err, ok, type Result } from '../../../../shared-kernel/result.js';
 import type { UserRegistered } from '../events/user-registered.js';
 import { copyDeviceKey, DeviceKeyId, type DeviceKey } from './device-key.js';
 import type { KeyIdentifier } from './key-identifier.js';
 import type { Platform } from './platform.js';
 import type { PublicKey } from './public-key.js';
+import type {
+  DeviceKeyNotFound,
+  KeyRevoked,
+  RevokeOutcome,
+} from './user-errors.js';
 import {
   trustLevelFor,
   type AttestationResult,
@@ -41,7 +47,7 @@ export interface UserState {
  * key identifiers unique.
  */
 export class User extends AggregateRoot<UserRegistered> {
-  readonly #state: UserState;
+  #state: UserState;
 
   private constructor(state: UserState, version: number) {
     super(version);
@@ -104,5 +110,50 @@ export class User extends AggregateRoot<UserRegistered> {
 
   get deviceKeys(): readonly DeviceKey[] {
     return this.#state.deviceKeys.map(copyDeviceKey);
+  }
+
+  /**
+   * FR-AUTH-07: a revoked key cannot open a session or register again. Registration and session
+   * creation ask this after the device proved it holds the key. Throws if the user has no such
+   * key: callers find the user by the key, so that would be a programming error.
+   */
+  checkKeyUsable(keyIdentifier: KeyIdentifier): Result<DeviceKey, KeyRevoked> {
+    const key = this.#keyFor(keyIdentifier);
+    if (key === undefined)
+      throw new Error(`User ${this.#state.id} has no such device key`);
+    return key.status === 'revoked'
+      ? err({ code: 'KEY_REVOKED' })
+      : ok(copyDeviceKey(key));
+  }
+
+  /**
+   * FR-AUTH-07: revokes a key (leak or fraud suspicion). A revoked key stays revoked; revoking it
+   * again changes nothing and says so, so the caller can skip saving.
+   */
+  revokeDeviceKey(
+    keyIdentifier: KeyIdentifier,
+    now: Date,
+  ): Result<RevokeOutcome, DeviceKeyNotFound> {
+    const key = this.#keyFor(keyIdentifier);
+    if (key === undefined) return err({ code: 'NOT_FOUND' });
+    if (key.status === 'revoked') return ok('already_revoked');
+    const revoked: DeviceKey = {
+      ...key,
+      status: 'revoked',
+      revokedAt: new Date(now),
+    };
+    this.#state = {
+      ...this.#state,
+      deviceKeys: this.#state.deviceKeys.map((candidate) =>
+        candidate.id === key.id ? revoked : candidate,
+      ),
+    };
+    return ok('revoked');
+  }
+
+  #keyFor(keyIdentifier: KeyIdentifier): DeviceKey | undefined {
+    return this.#state.deviceKeys.find(
+      (candidate) => candidate.keyIdentifier === keyIdentifier,
+    );
   }
 }

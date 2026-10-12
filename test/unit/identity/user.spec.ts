@@ -4,6 +4,7 @@ import {
   anAttestedKey,
   aUser,
   KEY_IDENTIFIER,
+  OTHER_KEY_IDENTIFIER,
   PUBLIC_KEY,
   REGISTERED_AT,
   USER_ID,
@@ -100,5 +101,77 @@ describe('User', () => {
     // Then the user is unchanged
     expect(user.createdAt).toEqual(REGISTERED_AT);
     expect(user.deviceKeys[0]?.createdAt).toEqual(REGISTERED_AT);
+  });
+
+  describe('revoking a device key (FR-AUTH-07)', () => {
+    const REVOKED_AT = new Date('2026-10-13T08:00:00.000Z');
+
+    it('marks the key revoked and remembers when, leaving the user and its events alone', () => {
+      // Given a registered user whose registration event was taken
+      const user = aUser();
+      takeRecordedEvents(user);
+
+      // When its key is revoked
+      const outcome = user.revokeDeviceKey(KEY_IDENTIFIER, REVOKED_AT);
+
+      // Then the key is revoked at that time, and no event was recorded
+      expect(outcome).toEqual({ ok: true, value: 'revoked' });
+      expect(user.deviceKeys[0]).toMatchObject({
+        status: 'revoked',
+        revokedAt: REVOKED_AT,
+      });
+      expect(takeRecordedEvents(user)).toEqual([]);
+    });
+
+    it('does nothing when the key is already revoked, so the first revocation time stays', () => {
+      // Given a revoked key
+      const user = aUser();
+      user.revokeDeviceKey(KEY_IDENTIFIER, REVOKED_AT);
+
+      // When it is revoked again later
+      const outcome = user.revokeDeviceKey(
+        KEY_IDENTIFIER,
+        new Date('2026-10-14T08:00:00.000Z'),
+      );
+
+      // Then it says so and keeps the first time
+      expect(outcome).toEqual({ ok: true, value: 'already_revoked' });
+      expect(user.deviceKeys[0]?.revokedAt).toEqual(REVOKED_AT);
+    });
+
+    it('reports a key the user does not have', () => {
+      // Given a user and the identifier of another device's key
+      const user = aUser();
+
+      // When that key is revoked
+      const outcome = user.revokeDeviceKey(OTHER_KEY_IDENTIFIER, REVOKED_AT);
+
+      // Then it is NOT_FOUND and the user's own key is untouched
+      expect(outcome).toEqual({ ok: false, error: { code: 'NOT_FOUND' } });
+      expect(user.deviceKeys[0]?.status).toBe('active');
+    });
+
+    it('lets an active key be used and refuses a revoked one with KEY_REVOKED', () => {
+      // Given a user with an active key
+      const user = aUser();
+
+      // When the key is checked before and after revocation
+      const before = user.checkKeyUsable(KEY_IDENTIFIER);
+      user.revokeDeviceKey(KEY_IDENTIFIER, REVOKED_AT);
+      const after = user.checkKeyUsable(KEY_IDENTIFIER);
+
+      // Then it is usable first, and KEY_REVOKED afterwards
+      expect(before.ok && before.value.keyIdentifier).toBe(KEY_IDENTIFIER);
+      expect(after).toEqual({ ok: false, error: { code: 'KEY_REVOKED' } });
+    });
+
+    it('treats checking a key the user does not have as a programming error', () => {
+      // Given a user
+      const user = aUser();
+
+      // When a key of another device is checked
+      // Then it throws: callers find the user by the key
+      expect(() => user.checkKeyUsable(OTHER_KEY_IDENTIFIER)).toThrow();
+    });
   });
 });

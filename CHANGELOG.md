@@ -29,6 +29,7 @@ All notable changes to this project are recorded here. The format follows [Keep 
 
 - Bounded contexts moved to `src/contexts/<context>/` (shared kernel, platform and composition stay beside them); every dependency rule rewritten and re-proven; new rule `platform-imports-no-context`. `docs/07` v1.11.
 - API contract 0.2.2-demo: `RegisterRequest` and `SessionRequest.keyId` descriptions document the development-mode content (encodings, signed bytes, DER signatures, `"format":"dev"`); no field, type or endpoint changes.
+- API contract 0.2.3-demo: `/v1/auth/register` verifies key possession on every registration, also for an already registered key; an invalid signature is `401 SIGNATURE_INVALID` and a revoked key `403 KEY_REVOKED` (descriptions, responses and examples only; no field or code changes).
 - Published event types are defined in the publisher's `domain/events/` (`UserRegistered`, `FeedbackValidated`); `public/` only re-exports them. dependency-cruiser rule `domain-events-only-shared-kernel`. `docs/06` v1.1, `docs/07` v1.10.
 - `docs/07` v1.9: adapters log through the shared-kernel `Logger` port; no personal data in log fields; tests use the `RecordingLogger` fake.
 - `docs/07` v1.8 and `docs/08`: context-specific access keys (`*-access.ts`) with the `context-access-only-in-domain-and-outbound` rule; event routes are registered only in `src/composition/event-routes.ts` and frozen afterwards; the `UserRegistered` → `OpenWallet` wiring moves back into S0-06.

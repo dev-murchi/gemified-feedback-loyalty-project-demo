@@ -59,6 +59,30 @@ export function userRepositoryContract(
       expect(stateOf(loaded)).toEqual(stateOf(user));
     });
 
+    it('keeps a revoked key revoked after saving and loading (FR-AUTH-07)', async () => {
+      // Given a stored user whose key is revoked and saved again
+      await save(aUser());
+      const stored = await harness.users.findById(USER_ID);
+      if (stored === undefined) throw new Error('user is not stored');
+      stored.revokeDeviceKey(
+        KEY_IDENTIFIER,
+        new Date('2026-10-13T08:00:00.000Z'),
+      );
+      await save(stored);
+
+      // When it is loaded by user id and by key identifier
+      const byId = await harness.users.findById(USER_ID);
+      const byKey = await harness.users.findByKeyIdentifier(KEY_IDENTIFIER);
+
+      // Then the key is still revoked, with its time
+      for (const loaded of [byId, byKey]) {
+        expect(loaded?.deviceKeys[0]).toMatchObject({
+          status: 'revoked',
+          revokedAt: new Date('2026-10-13T08:00:00.000Z'),
+        });
+      }
+    });
+
     it('finds a user by the identifier of their device key (FR-AUTH-02)', async () => {
       // Given a stored user
       await save(aUser());

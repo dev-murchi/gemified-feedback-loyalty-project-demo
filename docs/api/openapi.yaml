@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Geri Bildirim ve Sadakat Motoru API
-  version: 0.2.2-demo
+  version: 0.2.3-demo
   description: |
     Demo (Sprint 0) kapsamındaki uç noktaların sözleşmesi. Bu dosya, backend ile Flutter
     ekibi arasındaki anlaşmanın kaynağıdır (SDD ADR-006); uygulamanın ürettiği OpenAPI
@@ -122,6 +122,13 @@ paths:
         - Platform doğrulaması başarısız olursa kayıt reddedilmez; hesap düşük güven modunda
           açılır ve `trustLevel: low` döner. Bu modda yorum yazılabilir ama ödül kazanılamaz
           (SRS FR-AUTH-06). İstemci kullanıcıyı bu durum hakkında bilgilendirmelidir.
+        - Anahtar sahipliği her kayıtta doğrulanır; anahtar zaten kayıtlı olsa bile. Nonce
+          üzerindeki imza doğrulanamazsa kayıt reddedilir (`SIGNATURE_INVALID`). Platform
+          doğrulamasının başarısız olması (düşük güven) ile imzanın geçersiz olması farklı
+          durumlardır.
+        - Anahtar iptal edilmişse (`KEY_REVOKED`) kayıt reddedilir ve mevcut kullanıcının
+          oturumu verilmez (SRS FR-AUTH-07). Bu, anahtar sahipliği kanıtlandıktan sonra söylenir;
+          imzası geçersiz olan istek iptal durumunu öğrenemez.
 
         Demo ortamında doğrulama `DevAttestationVerifier` ile yapılır; üretimde bu doğrulayıcı açılamaz.
       security: []
@@ -176,18 +183,42 @@ paths:
                   xpToNextLevel: 100
         '400': { $ref: '#/components/responses/ValidationError' }
         '401':
-          description: Challenge geçersiz, süresi dolmuş veya daha önce kullanılmış (`CHALLENGE_INVALID`)
+          description: >-
+            Challenge geçersiz, süresi dolmuş veya daha önce kullanılmış (`CHALLENGE_INVALID`) ya da
+            anahtar sahipliği kanıtı (imza) doğrulanamadı (`SIGNATURE_INVALID`)
+          headers:
+            X-Request-Id: { $ref: '#/components/headers/XRequestId' }
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+              examples:
+                challengeInvalid:
+                  value:
+                    type: 'https://errors.example.invalid/challenge-invalid'
+                    title: Nonce geçersiz, süresi dolmuş veya daha önce kullanılmış
+                    status: 401
+                    code: CHALLENGE_INVALID
+                    requestId: '7d3e1c0a-2b4f-4e8a-9c6d-5f1a2b3c4d5e'
+                signatureInvalid:
+                  value:
+                    type: 'https://errors.example.invalid/signature-invalid'
+                    title: Anahtar sahipliği kanıtı (imza) doğrulanamadı
+                    status: 401
+                    code: SIGNATURE_INVALID
+                    requestId: '7d3e1c0a-2b4f-4e8a-9c6d-5f1a2b3c4d5f'
+        '403':
+          description: Cihaz anahtarı iptal edilmiş (`KEY_REVOKED`)
           headers:
             X-Request-Id: { $ref: '#/components/headers/XRequestId' }
           content:
             application/problem+json:
               schema: { $ref: '#/components/schemas/Problem' }
               example:
-                type: 'https://errors.example.invalid/challenge-invalid'
-                title: Nonce geçersiz, süresi dolmuş veya daha önce kullanılmış
-                status: 401
-                code: CHALLENGE_INVALID
-                requestId: '7d3e1c0a-2b4f-4e8a-9c6d-5f1a2b3c4d5e'
+                type: 'https://errors.example.invalid/key-revoked'
+                title: Cihaz anahtarı iptal edilmiş
+                status: 403
+                code: KEY_REVOKED
+                requestId: '7d3e1c0a-2b4f-4e8a-9c6d-5f1a2b3c4d60'
         '429': { $ref: '#/components/responses/TooManyRequests' }
 
   /v1/auth/session:
