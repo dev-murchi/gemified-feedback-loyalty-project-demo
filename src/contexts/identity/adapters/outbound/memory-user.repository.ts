@@ -1,6 +1,12 @@
 import type { InMemoryTable } from '../../../../shared-kernel/adapters/in-memory-table.js';
-import { saveVersioned } from '../../../../shared-kernel/adapters/save-versioned.js';
+import {
+  asPromise,
+  checkVersion,
+  commitVersioned,
+} from '../../../../shared-kernel/adapters/save-versioned.js';
+import { ConcurrencyConflictError } from '../../../../shared-kernel/concurrency-conflict-error.js';
 import type { UserId } from '../../../../shared-kernel/ids.js';
+import type { Logger } from '../../../../shared-kernel/logger.js';
 import type { EventCollector } from '../../../../shared-kernel/unit-of-work.js';
 import type { UserRepository } from '../../application/ports/user-repository.js';
 import type {
@@ -42,6 +48,7 @@ export interface UserRow {
 export interface MemoryUserRepositoryDeps {
   readonly table: InMemoryTable<string, UserRow>;
   readonly events: EventCollector;
+  readonly logger: Logger;
 }
 
 const toDeviceKey = (row: DeviceKeyRow): DeviceKey => ({
@@ -104,29 +111,41 @@ export class MemoryUserRepository implements UserRepository {
     return Promise.resolve(row === undefined ? undefined : toUser(row));
   }
 
+  /** User version first, then the key constraint, then all writes (docs/07 §6). */
   save(user: User): Promise<void> {
-    if (this.#keyTakenByAnotherUser(user)) {
-      return Promise.reject(
-        new Error('A device key of this user already belongs to another user'),
-      );
-    }
-    return saveVersioned(this.deps, user, {
-      key: user.id,
-      toRow: (version) => toRow(user, version),
+    return asPromise(() => {
+      const storedVersion = checkVersion(this.deps.table, user.id, user);
+      this.#assertKeysFree(user);
+      commitVersioned(this.deps, user, {
+        key: user.id,
+        toRow: (version) => toRow(user, version),
+        storedVersion,
+      });
     });
   }
 
-  /** Emulates the unique constraint on DEVICE_KEYS.key_identifier (FR-AUTH-02). */
-  #keyTakenByAnotherUser(user: User): boolean {
+  /**
+   * Emulates the unique constraint `device_keys_key_identifier_uq` (FR-AUTH-02). A taken key means
+   * the same device registered concurrently: a concurrency symptom, logged and retried by the
+   * caller, whose rerun finds the existing user.
+   */
+  #assertKeysFree(user: User): void {
     const keys = new Set<string>(
       user.deviceKeys.map((key) => key.keyIdentifier),
     );
-    return this.deps.table
+    const taken = this.deps.table
       .values()
-      .some(
-        (row) =>
-          row.id !== user.id &&
-          row.deviceKeys.some((key) => keys.has(key.keyIdentifier)),
-      );
+      .filter((row) => row.id !== user.id)
+      .flatMap((row) => row.deviceKeys)
+      .find((key) => keys.has(key.keyIdentifier));
+    if (taken === undefined) return;
+    this.deps.logger.warn(
+      'Device key already belongs to another user; retrying the unit of work',
+      {
+        constraint: 'device_keys_key_identifier_uq',
+        key: taken.keyIdentifier,
+      },
+    );
+    throw new ConcurrencyConflictError(taken.keyIdentifier);
   }
 }

@@ -12,6 +12,7 @@ import { fixedRoutes } from '../../src/shared-kernel/event-routing.js';
 import type { OutboxRecord } from '../../src/shared-kernel/outbox-record.js';
 import type { UnitOfWork } from '../../src/shared-kernel/unit-of-work.js';
 import { FakeClock } from './fake-clock.js';
+import { RecordingLogger } from './recording-logger.js';
 import { SequentialIdGenerator } from './sequential-id-generator.js';
 
 /** Everything an Identity repository test needs; the PostgreSQL harness (S0-11) has the same shape. */
@@ -20,6 +21,7 @@ export interface IdentityHarness {
   readonly users: UserRepository;
   /** UserRegistered events delivered by committed and rolled-back units of work alike. */
   readonly delivered: UserRegistered[];
+  readonly logger: RecordingLogger;
   dispose(): Promise<void>;
 }
 
@@ -27,6 +29,7 @@ export interface IdentityHarness {
 export function memoryIdentityHarness(): Promise<IdentityHarness> {
   const users = new InMemoryTable<string, UserRow>();
   const delivered: UserRegistered[] = [];
+  const logger = new RecordingLogger();
   const recordUserRegistered = {
     handle: (event: UserRegistered) => {
       delivered.push(event);
@@ -42,8 +45,9 @@ export function memoryIdentityHarness(): Promise<IdentityHarness> {
   });
   return Promise.resolve({
     uow,
-    users: new MemoryUserRepository({ table: users, events: uow }),
+    users: new MemoryUserRepository({ table: users, events: uow, logger }),
     delivered,
+    logger,
     dispose: () => Promise.resolve(),
   });
 }

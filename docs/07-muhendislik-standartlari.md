@@ -8,7 +8,7 @@ Bu doküman, kodun nasıl yazılacağını tanımlar: Clean Architecture katmanl
 
 | Alan | Değer |
 | --- | --- |
-| Sürüm | 1.11 |
+| Sürüm | 1.12 |
 | Dayandığı dokümanlar | SDD v1.2, Alan Modeli v1.1, Test Stratejisi v1.3 |
 | Değişiklik (1.1) | Test aracı Jest yerine Vitest: NestJS 12 yalnızca ESM; Vitest ESM'i doğal olarak destekler; dependency-cruiser'a `shared-kernel-is-pure` kuralı eklendi (shared kernel'i her domain dolaylı olarak içe aktarır) |
 | Değişiklik (1.2) | `shared-kernel/adapters/` (paylaşılan bellek içi UnitOfWork ve sistem saati) ve `test/support/` (FakeClock) eklendi; dependency-cruiser'a `core-does-not-use-shared-adapters` kuralı eklendi |
@@ -20,6 +20,7 @@ Bu doküman, kodun nasıl yazılacağını tanımlar: Clean Architecture katmanl
 | Değişiklik (1.8) | Context'e özgü erişim anahtarları (`*-access.ts`) ve `context-access-only-in-domain-and-outbound` kuralı; olay yönlendirmeleri yalnızca `src/composition/event-routes.ts` dosyasında, kayıttan sonra dondurulur |
 | Değişiklik (1.9) | Loglama shared kernel'deki `Logger` port'u üzerinden; alanlarda kişisel veri yok; testler `RecordingLogger` sahtesiyle |
 | Değişiklik (1.10) | Yayınlanan olay tipleri `domain/events/` içinde tanımlanır, `public/` yalnızca yeniden dışa aktarır; `domain-events-only-shared-kernel` kuralı |
+| Değişiklik (1.12) | Benzersizlik kısıtı istisnası ikiye çıktı: `DEVICE_KEYS.key_identifier` kısıtı da adıyla `ConcurrencyConflictError`'a çevrilir (eşzamanlı kayıt, FR-AUTH-02) |
 | Değişiklik (1.11) | Context'ler `src/contexts/` altına taşındı; `src/platform/` ortak altyapı; kural desenleri güncellendi; `platform-imports-no-context` kuralı |
 | Kapsam | `src/` ve `test/` altındaki tüm kod |
 
@@ -143,7 +144,7 @@ export class SubmitFeedback {
 - Biçim doğrulaması (eksik alan, yanlış tip) inbound adapter'da yapılır ve `VALIDATION_ERROR` döner. Anlam doğrulaması (metin uzunluğu, QR geçerliliği) değer nesnelerinde ve aggregate'lerde yapılır ve kendi kodunu döner.
 - `null` bir hatayı ifade etmek için kullanılmaz.
 - Eşzamanlılık çakışması bir domain hatası değildir ve hiçbir `Result` tipinde yer almaz; API hata kataloğu değişmez.
-- Benzersizlik kısıtı ihlalleri altyapı hatasıdır ve fırlatılır. Tek istisna ledger idempotency anahtarının kısıtıdır (`LEDGER_ENTRIES.idempotency_key`): yalnızca bu kısıt, **adıyla eşleştirilerek** `ConcurrencyConflictError`'a çevrilir; unit of work geri alınır, `retryOnConflict` tekrarlar ve tekrar `ok` döner. Repository, ledger kaydını eklemeden önce cüzdan sürümünü kontrol eder; kısıt yine de tetiklenirse anahtarla birlikte bir uyarı loglanır. Diğer benzersizlik ihlalleri (ör. QR token, G-3) hiçbir zaman çakışmaya çevrilmez.
+- Benzersizlik kısıtı ihlalleri altyapı hatasıdır ve fırlatılır. İki istisna vardır ve her ikisi de **adıyla eşleştirilerek** `ConcurrencyConflictError`'a çevrilir: ledger idempotency anahtarının kısıtı (`LEDGER_ENTRIES.idempotency_key`) ve cihaz anahtarı tanımlayıcısının kısıtı (`DEVICE_KEYS.key_identifier`, `device_keys_key_identifier_uq`). Unit of work geri alınır, `retryOnConflict` tekrarlar; ledger için tekrar `ok` döner, kayıtta (`RegisterDevice`) tekrar mevcut kullanıcıyı bulup döner (FR-AUTH-02). Repository, kaydı eklemeden önce sürümü kontrol eder; kısıt yine de tetiklenirse kısıt adı ve anahtarla bir uyarı loglanır. Diğer benzersizlik ihlalleri (ör. QR token, G-3) hiçbir zaman çakışmaya çevrilmez.
 - Adapter'lar loglamak için shared kernel'deki `Logger` port'unu kullanır (`warn(message, fields)`); doğrudan `console` veya framework logger'ı kullanılmaz. `fields` alanına kişisel veri veya yorum metni konmaz (T-I4); `level` ve `message` alanları her zaman port'a verilen değerlerdir. Testler log kayıtlarını `RecordingLogger` sahtesiyle doğrular, konsolu izlemez.
 - Unit of work içinde (use case işi veya senkron olay işleyicisi) hatalar genel bir try/catch ile yutulmaz; yakalanan bir `ConcurrencyConflictError` unit of work'ün commit edilmesine yol açar.
 

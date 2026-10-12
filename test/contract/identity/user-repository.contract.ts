@@ -90,18 +90,21 @@ export function userRepositoryContract(
       ]);
     });
 
-    it('refuses a device key that already belongs to another user, storing nothing', async () => {
+    it('reports a device key that already belongs to another user as a concurrency conflict, storing nothing', async () => {
       // Given a stored user
       await save(aUser());
 
       // When a different user with the same key identifier is saved
       const run = save(anotherUser());
 
-      // Then it fails as a storage error, not as a concurrency conflict, and nothing is stored
-      await expect(run).rejects.toThrow();
-      await expect(run).rejects.not.toBeInstanceOf(ConcurrencyConflictError);
+      // Then it conflicts (the caller retries and finds the existing user), nothing is stored,
+      // and the constraint is logged as a warning
+      await expect(run).rejects.toBeInstanceOf(ConcurrencyConflictError);
       expect(await harness.users.findById(OTHER_USER_ID)).toBeUndefined();
       expect(harness.delivered).toHaveLength(1);
+      expect(
+        harness.logger.warnings.map((warning) => warning.fields['constraint']),
+      ).toEqual(['device_keys_key_identifier_uq']);
     });
 
     it('stores two users with different device keys side by side', async () => {

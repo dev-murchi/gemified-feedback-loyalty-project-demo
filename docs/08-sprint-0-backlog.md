@@ -10,7 +10,7 @@ Demo kapsamındaki (SDD 11.1) beş modülün temel özelliklerini, Mühendislik 
 | --- | --- |
 | Başlangıç | 11 Ekim 2026 (sıfırdan) |
 | Zaman kutusu | Demo tarihi proje sahibiyle belirlenir; takım ilk günün sonunda hızını ölçüp kesme çizgisini (Bölüm 4) teyit eder |
-| Dayandığı dokümanlar | SDD v1.2 Bölüm 11, Alan Modeli v1.1, Mühendislik Standartları v1.11, Test Stratejisi v1.3 Bölüm 8 |
+| Dayandığı dokümanlar | SDD v1.2 Bölüm 11, Alan Modeli v1.1, Mühendislik Standartları v1.12, Test Stratejisi v1.3 Bölüm 8 |
 
 ## 2. Büyüklük ve Öncelik
 
@@ -96,7 +96,7 @@ S0-06, S0-05'ten önce yapılır (proje sahibi kararı, 11 Ekim 2026): her kulla
 
 ### S0-11 PostgreSQL adapter'ları
 
-- **İçerik:** ORM ve migration aracı kararı (ADR-017; S-20 yanıtlanmadığı için varsayılan PostgreSQL); SDD 6.1'e göre migration'lar (`version` ve `request_fingerprint` dahil); tüm repository'lerin PostgreSQL adapter'ları; `ReportingQueries`'in SQL karşılığı. Ledger idempotency anahtarının benzersizlik kısıtı adlandırılır (ör. `ledger_entries_idempotency_key_uq`); PostgreSQL adapter'ı yalnızca bu kısıt adını `ConcurrencyConflictError`'a çevirir, başka hiçbir `unique_violation`'ı çevirmez (07 Bölüm 6).
+- **İçerik:** ORM ve migration aracı kararı (ADR-017; S-20 yanıtlanmadığı için varsayılan PostgreSQL); SDD 6.1'e göre migration'lar (`version` ve `request_fingerprint` dahil); tüm repository'lerin PostgreSQL adapter'ları; `ReportingQueries`'in SQL karşılığı. Ledger idempotency anahtarının ve cihaz anahtarı tanımlayıcısının benzersizlik kısıtları adlandırılır (`ledger_entries_idempotency_key_uq`, `device_keys_key_identifier_uq`); PostgreSQL adapter'ı yalnızca bu iki kısıt adını `ConcurrencyConflictError`'a çevirir, başka hiçbir `unique_violation`'ı çevirmez (07 Bölüm 6).
 - **Bitiş kriterleri:** Repository sözleşme testlerinin tamamı PostgreSQL'e karşı geçiyor (Testcontainers). TC-QR-01 eşzamanlılık testi gerçek veritabanında geçiyor. ORM kararı ADR olarak kayıtlı.
 
 ### S0-12 Uçtan uca ve sözleşme testleri
