@@ -24,6 +24,7 @@ cp .env.example .env     # read by docker compose
 docker compose up -d     # PostgreSQL and Redis (not used by the app yet)
 npm run start:dev        # API with watch mode, http://localhost:3000
 DEMO_DATA=true npm run start:dev   # same, with the public demo catalog loaded
+JWT_PRIVATE_KEY="$(…)" JWT_KEY_ID=k1 npm run start:dev   # fixed signing key (see .env.example); without it a key is generated per process outside production
 npm run verify           # every quality gate, same as CI
 ```
 
@@ -59,10 +60,14 @@ src/
   main.api.ts              # API entry point
   composition/
     app.module.ts          # composition root (NestJS)
-    persistence.module.ts  # event router (created first), in-memory store and unit of work, logger,
+    persistence.module.ts  # event router (created first), clock, in-memory store and unit of work, logger,
                            # start-up check that the routes were frozen
     catalog.module.ts      # Catalog wiring; demo data only with DEMO_DATA=true
     gamification.module.ts # Gamification wiring; exports the handlers and the read side
+    identity.module.ts     # Identity wiring: dev verifiers, signing key, tokens, use cases, controllers
+    authentication.module.ts # the Authenticator behind BearerAuthGuard, over AuthenticateRequest
+    wallet-http.module.ts  # GET /v1/me/wallet: Gamification's controller behind the guard
+    configure-app.ts       # HTTP set-up shared by main.api.ts and the e2e tests
     event-routes.ts        # the only place event routes are registered; freezes the router
     event-routes.module.ts # runs event-routes.ts during start-up
     tokens.ts              # injection tokens
@@ -71,8 +76,20 @@ src/
                            # outbox record, repository-access keys, retryOnConflict
     adapters/              # InMemoryTable, InMemoryUnitOfWork, saveVersioned, EventRouter, SystemClock,
                            # RandomIdGenerator, CryptoRandomSource, ConsoleLogger
+  platform/
+    http/                  # error-codes (status table, titles), problem-details, problem-exception,
+                           # problem.filter, request-id, bearer-auth.guard, configure-http, parse-body
   contexts/
-    identity/                # domain/events/user-registered.ts; public/ re-exports it
+    identity/
+      domain/                # challenge/ (Nonce, Challenge), user/ (User, DeviceKey, trust level, key values),
+                             # session/ (token claims), events/user-registered.ts, attestation errors
+      application/           # ports/ (UserRepository, ChallengeStore, AttestationVerifier, SessionProofVerifier,
+                             # AccessTokenIssuer, AccessTokenVerifier), use-cases/ (CreateChallenge, RegisterDevice,
+                             # CreateSession, AuthenticateRequest), take-live-nonce, session-grant
+      adapters/
+        inbound/http/        # challenge and session controllers, Zod schemas, SessionWalletReader
+        outbound/            # memory user repository and challenge store, dev verifiers, jose tokens, signing key
+      public/                # UserRegistered
     feedback/                # domain/events/feedback-validated.ts; public/ re-exports it
     catalog/
       domain/                # sector, geo-point, topic-key; brand/, branch/ (QrCode, QrToken), label-set/
@@ -85,14 +102,17 @@ src/
       domain/                # level-policy, reward-amounts; wallet/ (Wallet, LedgerEntry, ledger-access)
       application/           # ports/ (WalletRepository), use-cases/ (OpenWallet, AwardReward, GetWallet,
                              # LookupReward)
-      adapters/outbound/     # memory-wallet.repository.ts (wallets + append-only ledger)
-      public/                # RewardLookup
+      adapters/
+        inbound/http/        # WalletController (GET /v1/me/wallet)
+        outbound/            # memory-wallet.repository.ts (wallets + append-only ledger)
+      public/                # RewardLookup, WalletReader
 scripts/                   # check-mock.ts, generate-demo-catalog.ts
 test/
   support/                 # fakes, builders, in-memory harnesses
-  unit/                    # shared-kernel/, catalog/, gamification/, composition/
-  contract/                # support/ (generic contracts), catalog/, gamification/
-  e2e/                     # application-level tests
+  unit/                    # shared-kernel/, catalog/, gamification/, identity/, platform/, composition/
+  contract/                # support/ (generic contracts), catalog/, gamification/, identity/
+  e2e/                     # the real AppModule over HTTP; global-setup.ts bundles the contract, setup.ts
+                           # checks every response against it
 ```
 
 Target (`docs/07` §3). Each context's folders are created when that context is built, one module at a time:
@@ -102,7 +122,7 @@ src/
   shared-kernel/           # ports and types
     adapters/              # shared in-memory adapters (plain TypeScript)
   platform/
-    http/                  # shared HTTP infrastructure (S0-05 slice 4)
+    http/                  # shared HTTP infrastructure (built in S0-05)
   contexts/
     <context>/             # identity, catalog, feedback, analysis, gamification, insights
       domain/
@@ -152,28 +172,50 @@ How a state change and its consequences end up in one transaction (ADR-014, ADR-
 
 Adapters log through the shared-kernel `Logger` port (`warn(message, fields)`), never `console` or a framework logger directly. `ConsoleLogger` writes one JSON line; fields come first, so they can never overwrite `level` or `message`. No personal data or feedback text in fields (T-I4). Tests assert log entries with the `RecordingLogger` fake (`docs/07` §6).
 
+## HTTP platform
+
+`src/platform/http/` is the shared, framework-bound part of every inbound HTTP adapter. It imports no context (`platform-imports-no-context`); what it needs from a context it defines as an interface, and the composition root implements it.
+
+| File                   | What it does                                                                                                                                                               |
+| ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `error-codes.ts`       | The one table from error code to HTTP status (and the fixed `title`). A test keeps it equal to the contract's catalog and `ErrorCode` enum. 429 is only for `RATE_LIMITED` |
+| `problem-details.ts`   | The `Problem` shape (RFC 9457 plus `code`, `requestId`, `retryAfterSeconds`, `errors`). There is no user-facing message                                                    |
+| `problem-exception.ts` | What a controller throws to end a request; `ProblemException.from(domainError)` keeps the code, the field of a validation error and `retryAfterSeconds`                    |
+| `problem.filter.ts`    | Turns every error into `application/problem+json`. Framework errors map by status; anything unexpected is `INTERNAL_ERROR`, logged with the request id and without details |
+| `request-id.ts`        | `X-Request-Id`: the caller's if plain, else a new one; echoed in the header and in every Problem                                                                           |
+| `bearer-auth.guard.ts` | `mobileBearer`: asks an `Authenticator` (provided by the composition root) who is calling; `@CurrentPrincipal()` hands the caller to the handler                           |
+| `configure-http.ts`    | Request id first, then the 8 KB JSON limit, then the filter; `X-Powered-By` disabled. Shared by `main.api.ts` and the e2e tests                                            |
+| `parse-body.ts`        | Request format validation with Zod; failures become `VALIDATION_ERROR` with the offending fields. Meaning is checked in the domain, not here                               |
+
+Controllers stay thin: parse the body, call one use case, turn an `Err` into a `ProblemException`, and map the result to the contract's JSON.
+
 ## Rules and how they are enforced
 
-| Rule                                                                                                                                                | Tool                                                             | Where                                   |
-| --------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- | --------------------------------------- |
-| Domain imports only its own domain and the shared kernel (no packages, no Node built-ins)                                                           | dependency-cruiser `domain-is-pure`                              | `.dependency-cruiser.cjs`               |
-| Application imports only its own domain/application, the shared kernel and other contexts' `public/`                                                | dependency-cruiser `application-has-no-infrastructure`           | `.dependency-cruiser.cjs`               |
-| A context reaches another context only through its `public/` folder                                                                                 | dependency-cruiser `only-public-across-contexts`                 | `.dependency-cruiser.cjs`               |
-| The shared kernel imports nothing outside itself                                                                                                    | dependency-cruiser `shared-kernel-is-pure`                       | `.dependency-cruiser.cjs`               |
-| Domain, application and the shared kernel's ports never import `shared-kernel/adapters/`                                                            | dependency-cruiser `core-does-not-use-shared-adapters`           | `.dependency-cruiser.cjs`               |
-| An aggregate's events can be taken only in outbound repository adapters                                                                             | dependency-cruiser `repository-access-only-in-outbound-adapters` | `.dependency-cruiser.cjs`               |
-| Demo data (`adapters/inbound/demo/`) is imported only by the composition root                                                                       | dependency-cruiser `demo-data-only-from-composition`             | `.dependency-cruiser.cjs`               |
-| Demo data is never loaded in production (`DEMO_DATA=true` with `NODE_ENV=production` fails startup)                                                 | `isDemoDataEnabled` + e2e test                                   | `src/composition/demo-data.ts`          |
-| A context's access keys (`*-access.ts`) only in its own domain and outbound adapters                                                                | dependency-cruiser `context-access-only-in-domain-and-outbound`  | `.dependency-cruiser.cjs`               |
-| Event files (`domain/events/`) import only the shared kernel                                                                                        | dependency-cruiser `domain-events-only-shared-kernel`            | `.dependency-cruiser.cjs`               |
-| Event routes are registered only in `src/composition/event-routes.ts` and frozen before serving                                                     | Start-up check (`EVENT_ROUTES_CHECK`) + code review              | `src/composition/persistence.module.ts` |
-| Adapters log only through the `Logger` port, without personal data                                                                                  | Code review                                                      | `docs/07` §6                            |
-| No circular dependencies                                                                                                                            | dependency-cruiser `no-circular`                                 | `.dependency-cruiser.cjs`               |
-| Complexity ≤ 9, depth 3, params 3, function ≤ 40 lines (not in tests), file ≤ 300 lines, 1 class per file, no `any`, no `!`                         | ESLint + typescript-eslint (type-aware)                          | `eslint.config.mjs`                     |
-| `strict`, `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`, `noImplicitOverride`, `noFallthroughCasesInSwitch`                              | TypeScript                                                       | `tsconfig.json`                         |
-| Shared kernel + domain + application line coverage ≥ 80 %                                                                                           | Vitest coverage (v8)                                             | `vitest.config.ts`                      |
-| No high or critical dependency vulnerabilities                                                                                                      | `npm audit --audit-level=high`                                   | `.github/workflows/ci.yml`              |
-| The API contract lints without errors or warnings (`recommended` rules; `info-license` and `no-server-example.com` turned off, reasons in the file) | Redocly CLI                                                      | `redocly.yaml`                          |
+| Rule                                                                                                                                                | Tool                                                             | Where                                           |
+| --------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- | ----------------------------------------------- |
+| Domain imports only its own domain and the shared kernel (no packages, no Node built-ins)                                                           | dependency-cruiser `domain-is-pure`                              | `.dependency-cruiser.cjs`                       |
+| Application imports only its own domain/application, the shared kernel and other contexts' `public/`                                                | dependency-cruiser `application-has-no-infrastructure`           | `.dependency-cruiser.cjs`                       |
+| A context reaches another context only through its `public/` folder                                                                                 | dependency-cruiser `only-public-across-contexts`                 | `.dependency-cruiser.cjs`                       |
+| The shared kernel imports nothing outside itself                                                                                                    | dependency-cruiser `shared-kernel-is-pure`                       | `.dependency-cruiser.cjs`                       |
+| Domain, application and the shared kernel's ports never import `shared-kernel/adapters/`                                                            | dependency-cruiser `core-does-not-use-shared-adapters`           | `.dependency-cruiser.cjs`                       |
+| An aggregate's events can be taken only in outbound repository adapters                                                                             | dependency-cruiser `repository-access-only-in-outbound-adapters` | `.dependency-cruiser.cjs`                       |
+| Demo data (`adapters/inbound/demo/`) is imported only by the composition root                                                                       | dependency-cruiser `demo-data-only-from-composition`             | `.dependency-cruiser.cjs`                       |
+| Demo data is never loaded in production (`DEMO_DATA=true` with `NODE_ENV=production` fails startup)                                                 | `isDemoDataEnabled` + e2e test                                   | `src/composition/demo-data.ts`                  |
+| A context's access keys (`*-access.ts`) only in its own domain and outbound adapters                                                                | dependency-cruiser `context-access-only-in-domain-and-outbound`  | `.dependency-cruiser.cjs`                       |
+| Event files (`domain/events/`) import only the shared kernel                                                                                        | dependency-cruiser `domain-events-only-shared-kernel`            | `.dependency-cruiser.cjs`                       |
+| `platform/` imports no context and no composition                                                                                                   | dependency-cruiser `platform-imports-no-context`                 | `.dependency-cruiser.cjs`                       |
+| The error code to HTTP status table equals the contract's error catalog and `ErrorCode` enum                                                        | `error-catalog.spec.ts`                                          | `test/unit/platform/`                           |
+| Every e2e response matches `docs/api/openapi.yaml` (shape, status, content type, headers, error code)                                               | ajv + Redocly bundle, checked after each e2e test                | `test/e2e/setup.ts`, `test/support/contract.ts` |
+| Error responses leak no internals (T-I7)                                                                                                            | `error-hygiene.e2e-spec.ts`                                      | `test/e2e/`                                     |
+| The development verifiers refuse `NODE_ENV=production` (TC-AUTH-09)                                                                                 | e2e start-up test                                                | `test/e2e/auth-token-and-startup.e2e-spec.ts`   |
+| Event routes are registered only in `src/composition/event-routes.ts` and frozen before serving                                                     | Start-up check (`EVENT_ROUTES_CHECK`) + code review              | `src/composition/persistence.module.ts`         |
+| Adapters log only through the `Logger` port, without personal data                                                                                  | Code review                                                      | `docs/07` §6                                    |
+| No circular dependencies                                                                                                                            | dependency-cruiser `no-circular`                                 | `.dependency-cruiser.cjs`                       |
+| Complexity ≤ 9, depth 3, params 3, function ≤ 40 lines (not in tests), file ≤ 300 lines, 1 class per file, no `any`, no `!`                         | ESLint + typescript-eslint (type-aware)                          | `eslint.config.mjs`                             |
+| `strict`, `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`, `noImplicitOverride`, `noFallthroughCasesInSwitch`                              | TypeScript                                                       | `tsconfig.json`                                 |
+| Shared kernel + domain + application line coverage ≥ 80 %                                                                                           | Vitest coverage (v8)                                             | `vitest.config.ts`                              |
+| No high or critical dependency vulnerabilities                                                                                                      | `npm audit --audit-level=high`                                   | `.github/workflows/ci.yml`                      |
+| The API contract lints without errors or warnings (`recommended` rules; `info-license` and `no-server-example.com` turned off, reasons in the file) | Redocly CLI                                                      | `redocly.yaml`                                  |
 
 NestJS appears only in `adapters/` and `composition/` (ADR-021); dependency-cruiser fails the build otherwise.
 
@@ -182,6 +224,7 @@ NestJS appears only in `adapters/` and `composition/` (ADR-021); dependency-crui
 - Vitest with globals enabled. Four projects in `vitest.config.ts`: `unit`, `contract` and `integration` run `test/<level>/**/*.spec.ts`; `e2e` runs `test/e2e/**/*.e2e-spec.ts`.
 - Coverage is measured only on `src/shared-kernel`, `src/*/domain` and `src/*/application`.
 - Fakes, not mocks, for ports; `FakeClock` for time; Given / When / Then (`docs/07` §9).
+- The e2e tests boot the real `AppModule` with a fake clock and a recording logger (`test/support/start-app.ts`) and talk to it over HTTP with `supertest`. A `globalSetup` bundles `docs/api/openapi.yaml` once with Redocly; a recording middleware checks every response against it and `test/e2e/setup.ts` fails the test that provoked a mismatch.
 
 ## NestJS CLI conventions
 
@@ -217,8 +260,17 @@ Use cases and ports are plain TypeScript; they are wired into NestJS in `composi
 | Each ledger entry stores `xpTotalAfter` (SDD v1.2)                                                 | A feedback's level-up is derived from a fact that never changes                                                                                                                            |
 | A ledger entry's earning date is the feedback's `submittedAt`                                      | Points expiry counts from the customer's visit, and it is identical across retries                                                                                                         |
 | Only the named ledger-key constraint maps to `ConcurrencyConflictError`                            | A duplicate reward key is a concurrency symptom; every other unique violation is an infrastructure error                                                                                   |
+| Development attestation: a made-up envelope with real P-256 / ES256 proof of possession            | The same cryptographic path as production; both development verifiers refuse `NODE_ENV=production`                                                                                         |
+| `jose` for ES256 access tokens; key from `JWT_PRIVATE_KEY` and `JWT_KEY_ID`                        | Only ES256 and our `kid` are accepted; a key is generated outside production and required in production                                                                                    |
+| Zod 4 validates request format at the HTTP edge only                                               | Strict objects mirror `additionalProperties: false`; meaning stays in the domain                                                                                                           |
+| Identity's `SessionWalletReader`, answered in the composition root                                 | Identity depends on no other context, so there is no context cycle                                                                                                                         |
+| Waiting challenges are capped (10 000)                                                             | The challenge endpoint needs no login; the trade-off is recorded in `docs/08` S0-10                                                                                                        |
+| `ajv` and `ajv-formats` as devDependencies; Redocly bundles the contract                           | Real responses are checked against `openapi.yaml` in every e2e test without a YAML parser                                                                                                  |
 | Contexts under `src/contexts/`                                                                     | Rules match contexts by path; shared folders (`shared-kernel/`, `platform/`, `composition/`) never need exceptions                                                                         |
 
 ## Known gaps
 
 - Vitest's default transformer may not emit decorator metadata. A NestJS provider that relies on class-based injection inside a Vitest test may need `unplugin-swc`. Factory providers avoid this.
+- An access token is trusted until it expires (at most 15 minutes); a key revoked meanwhile is refused at the next session.
+- The attestation is a development stand-in. The real Apple and Google verifiers come later, so the application cannot start in production yet.
+- The challenge store is in memory and single-process; per-IP rate limiting is S0-10.

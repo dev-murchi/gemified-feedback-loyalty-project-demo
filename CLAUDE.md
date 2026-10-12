@@ -31,7 +31,7 @@ These rules were set after real friction in the planning chat. Follow them.
 | --- | --- |
 | Requirements | Closed – SRS v1.5 (customer validation pending at demo) |
 | Design | Closed 10 Oct 2026; SDD v1.1 aligned on 11 Oct; v1.2 on 12 Oct (`xp_total_after`, S0-06) |
-| **Development** | **Sprint 0 restarted from scratch on 11 Oct 2026. S0-01 done 11 Oct 2026 (CI green, reviewed). S0-02 done 11 Oct 2026 (CI green, reviewed; contract 0.2.1-demo). S0-03 done 11 Oct 2026 (CI green, reviewed; review fixes: `takeEvents` key, `InMemoryTable` copies). S0-04 done 11 Oct 2026 (CI green, reviewed; review fixes: conflicts thrown and rolled back, `docs/07` v1.6). S0-06 done 12 Oct 2026 (CI green, reviewed; done before S0-05, owner decision: every user has a wallet from the moment they exist). Next: S0-05.** |
+| **Development** | **Sprint 0 restarted from scratch on 11 Oct 2026. S0-01 done 11 Oct 2026 (CI green, reviewed). S0-02 done 11 Oct 2026 (CI green, reviewed; contract 0.2.1-demo). S0-03 done 11 Oct 2026 (CI green, reviewed; review fixes: `takeEvents` key, `InMemoryTable` copies). S0-04 done 11 Oct 2026 (CI green, reviewed; review fixes: conflicts thrown and rolled back, `docs/07` v1.6). S0-06 done 12 Oct 2026 (CI green, reviewed; done before S0-05, owner decision: every user has a wallet from the moment they exist). S0-05 done 13 Oct 2026 (CI green, reviewed; contract 0.2.4-demo, `docs/07` v1.12). Next: S0-07.** |
 
 A first Sprint 0 attempt existed; its code and the git history were removed on purpose on 11 Oct 2026. Do not recreate it.
 
