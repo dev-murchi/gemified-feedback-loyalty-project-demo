@@ -113,6 +113,15 @@ export class User extends AggregateRoot<UserRegistered> {
   }
 
   /**
+   * The user's key with this identifier, revoked or not, so a session can verify the signature
+   * before saying anything about revocation. Undefined if the user has no such key.
+   */
+  deviceKey(keyIdentifier: KeyIdentifier): DeviceKey | undefined {
+    const key = this.#keyFor(keyIdentifier);
+    return key === undefined ? undefined : copyDeviceKey(key);
+  }
+
+  /**
    * FR-AUTH-07: a revoked key cannot open a session or register again. Registration and session
    * creation ask this after the device proved it holds the key. Throws if the user has no such
    * key: callers find the user by the key, so that would be a programming error.

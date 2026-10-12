@@ -1,4 +1,5 @@
 import { DevAttestationVerifier } from '../../../src/contexts/identity/adapters/outbound/dev-attestation.verifier.js';
+import { DevSessionProofVerifier } from '../../../src/contexts/identity/adapters/outbound/dev-session-proof.verifier.js';
 import type { AttestationEvidence } from '../../../src/contexts/identity/application/ports/attestation-verifier.js';
 import { Nonce } from '../../../src/contexts/identity/domain/challenge/nonce.js';
 import { FakeDevice, type EvidenceOptions } from '../../support/fake-device.js';
@@ -216,6 +217,12 @@ describe('DevAttestationVerifier', () => {
       // Then it fails, so the application cannot start with it
       expect(() =>
         DevAttestationVerifier.forEnvironment('production'),
+      ).toThrow();
+    });
+
+    it('refuses the development session verifier in production too', () => {
+      expect(() =>
+        DevSessionProofVerifier.forEnvironment('production'),
       ).toThrow();
     });
 

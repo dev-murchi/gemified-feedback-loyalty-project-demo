@@ -120,3 +120,12 @@ export const parseDevProof = (
     ? { signature, integrity, publicKey }
     : undefined;
 };
+
+/** The development stand-ins must never run in production (TC-AUTH-09, T-E3). */
+export const refuseInProduction = (
+  nodeEnv: string | undefined,
+  what: string,
+): void => {
+  if (nodeEnv === 'production')
+    throw new Error(`${what} must not be used with NODE_ENV=production`);
+};

@@ -1,9 +1,13 @@
 import { DevAttestationVerifier } from '../../src/contexts/identity/adapters/outbound/dev-attestation.verifier.js';
+import { DevSessionProofVerifier } from '../../src/contexts/identity/adapters/outbound/dev-session-proof.verifier.js';
 import { MemoryChallengeStore } from '../../src/contexts/identity/adapters/outbound/memory-challenge.store.js';
 import type { UserRepository } from '../../src/contexts/identity/application/ports/user-repository.js';
 import { CreateChallenge } from '../../src/contexts/identity/application/use-cases/create-challenge.js';
+import { AuthenticateRequest } from '../../src/contexts/identity/application/use-cases/authenticate-request.js';
+import { CreateSession } from '../../src/contexts/identity/application/use-cases/create-session.js';
 import { RegisterDevice } from '../../src/contexts/identity/application/use-cases/register-device.js';
 import type { UnitOfWork } from '../../src/shared-kernel/unit-of-work.js';
+import { FakeAccessTokens } from './fake-access-tokens.js';
 import { FakeClock } from './fake-clock.js';
 import {
   memoryIdentityHarness,
@@ -16,6 +20,9 @@ export interface RegistrationFixture {
   readonly identity: IdentityHarness;
   readonly clock: FakeClock;
   readonly registerDevice: RegisterDevice;
+  readonly createSession: CreateSession;
+  readonly authenticateRequest: AuthenticateRequest;
+  readonly tokens: FakeAccessTokens;
   /** A fresh, live nonce from the real CreateChallenge use case. */
   issueNonce(): Promise<string>;
 }
@@ -30,7 +37,7 @@ export interface RegistrationFixtureOptions {
   };
 }
 
-/** RegisterDevice on in-memory adapters and the development verifier (NODE_ENV=test). */
+/** The Identity use cases on in-memory adapters and the development verifiers (NODE_ENV=test). */
 export async function registrationFixture(
   options: RegistrationFixtureOptions = {},
 ): Promise<RegistrationFixture> {
@@ -43,10 +50,13 @@ export async function registrationFixture(
     clock,
   });
   const base = options.identity ?? identity;
+  const tokens = new FakeAccessTokens(clock);
+  const users = options.wrapUsers?.(base.users) ?? base.users;
   const registerDevice = new RegisterDevice({
     challenges,
     attestation: DevAttestationVerifier.forEnvironment('test'),
-    users: options.wrapUsers?.(base.users) ?? base.users,
+    users,
+    tokens,
     uow: base.uow,
     ids: new SequentialIdGenerator(),
     clock,
@@ -55,6 +65,15 @@ export async function registrationFixture(
     identity,
     clock,
     registerDevice,
+    createSession: new CreateSession({
+      challenges,
+      users,
+      proofs: DevSessionProofVerifier.forEnvironment('test'),
+      tokens,
+      clock,
+    }),
+    authenticateRequest: new AuthenticateRequest({ tokens }),
+    tokens,
     issueNonce: async () => (await createChallenge.execute()).nonce,
   };
 }

@@ -35,7 +35,7 @@ describe('RegisterDevice', () => {
     const result = await registerAndroid();
 
     // Then a new user exists, found by the device key, and UserRegistered was published
-    expect(result).toEqual({
+    expect(result).toMatchObject({
       ok: true,
       value: { userId: USER_ID, trustLevel: 'normal', created: true },
     });
@@ -48,6 +48,35 @@ describe('RegisterDevice', () => {
     ).toEqual([USER_ID]);
   });
 
+  it('answers with a 15-minute access token for the new user and key (SDD 7.1)', async () => {
+    // When a device registers
+    const result = await registerAndroid();
+
+    // Then one token was minted for this user, key and trust level, for 900 seconds
+    expect(fixture.tokens.issued).toEqual([
+      {
+        userId: USER_ID,
+        keyIdentifier: device.androidKeyIdentifier,
+        trustLevel: 'normal',
+      },
+    ]);
+    expect(result.ok && result.value.expiresIn).toBe(900);
+    expect(result.ok && result.value.accessToken).toBeTruthy();
+  });
+
+  it('mints no token for a rejected registration', async () => {
+    // When registrations are rejected for a forged signature and for an unknown nonce
+    await registerAndroid({ signer: new FakeDevice() });
+    const unknown = 'A'.repeat(43);
+    await fixture.registerDevice.execute({
+      nonce: unknown,
+      evidence: device.androidEvidence(unknown),
+    });
+
+    // Then no token was issued
+    expect(fixture.tokens.issued).toEqual([]);
+  });
+
   it('returns the existing user when the same key registers again (FR-AUTH-02)', async () => {
     // Given a registered device
     await registerAndroid();
@@ -56,7 +85,7 @@ describe('RegisterDevice', () => {
     const again = await registerAndroid();
 
     // Then it is the same user, not created, and still only one UserRegistered
-    expect(again).toEqual({
+    expect(again).toMatchObject({
       ok: true,
       value: { userId: USER_ID, trustLevel: 'normal', created: false },
     });
@@ -80,10 +109,12 @@ describe('RegisterDevice', () => {
     const result = await registerAndroid({ integrity: 'fail' });
 
     // Then the account exists with low trust
-    expect(result).toEqual({
+    expect(result).toMatchObject({
       ok: true,
       value: { userId: USER_ID, trustLevel: 'low', created: true },
     });
+    // and its token says so too
+    expect(fixture.tokens.issued[0]?.trustLevel).toBe('low');
   });
 
   it('keeps the trust level of an existing user when the key registers again with a failed check', async () => {
@@ -252,7 +283,7 @@ describe('RegisterDevice', () => {
 
       // Then the key constraint made the first attempt conflict; the rerun returned the existing
       // user, nothing was duplicated, and the constraint was logged
-      expect(result).toEqual({
+      expect(result).toMatchObject({
         ok: true,
         value: { userId: USER_ID, trustLevel: 'normal', created: false },
       });

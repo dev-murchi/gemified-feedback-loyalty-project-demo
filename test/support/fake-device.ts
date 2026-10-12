@@ -90,6 +90,13 @@ export class FakeDevice {
     };
   }
 
+  /** The session proof in development mode: a DER signature over SHA-256(nonce), standard base64. */
+  sessionProof(nonce: string, options: EvidenceOptions = {}): string {
+    const message = options.signedMessage ?? FakeDevice.iosMessage(nonce);
+    const signer = options.signer ?? this;
+    return signer.sign(message, options.rawSignature).toString('base64');
+  }
+
   /** ES256 over `message` as the platform signer does: it hashes the given bytes once more. */
   sign(message: Buffer, rawSignature = false): Buffer {
     return sign('sha256', message, {

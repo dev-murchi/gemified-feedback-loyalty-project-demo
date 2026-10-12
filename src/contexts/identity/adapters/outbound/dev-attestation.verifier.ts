@@ -18,6 +18,7 @@ import type { AttestedDeviceKey } from '../../domain/user/user.js';
 import {
   parseDevProof,
   parseP256PublicKey,
+  refuseInProduction,
   sha256,
   toBase64Url,
   verifyDerSignature,
@@ -55,10 +56,7 @@ export class DevAttestationVerifier implements AttestationVerifier {
 
   /** The only way to get one: the application does not start in production with it. */
   static forEnvironment(nodeEnv: string | undefined): DevAttestationVerifier {
-    if (nodeEnv === 'production')
-      throw new Error(
-        'DevAttestationVerifier must not be used with NODE_ENV=production',
-      );
+    refuseInProduction(nodeEnv, 'DevAttestationVerifier');
     return new DevAttestationVerifier();
   }
 
