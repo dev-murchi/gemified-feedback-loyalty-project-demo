@@ -1,5 +1,6 @@
 import type { BrandRow } from '../contexts/catalog/adapters/outbound/memory-brand.repository.js';
 import type { BranchRow } from '../contexts/catalog/adapters/outbound/memory-branch.repository.js';
+import type { UserRow } from '../contexts/identity/adapters/outbound/memory-user.repository.js';
 import type { LabelSetRow } from '../contexts/catalog/adapters/outbound/memory-label-set.repository.js';
 import type {
   LedgerRow,
@@ -20,6 +21,10 @@ export interface CatalogTables {
   readonly labelSets: InMemoryTable<string, LabelSetRow>;
 }
 
+export interface IdentityTables {
+  readonly users: InMemoryTable<string, UserRow>;
+}
+
 export interface GamificationTables {
   readonly wallets: InMemoryTable<string, WalletRow>;
   readonly ledger: InMemoryTable<string, LedgerRow>;
@@ -35,11 +40,17 @@ export interface InMemoryStore {
   readonly ids: IdGenerator;
   readonly catalog: CatalogTables;
   readonly gamification: GamificationTables;
+  readonly identity: IdentityTables;
 }
 
-/** `routes` is the application's EventRouter, created first and filled after wiring. */
-export function createInMemoryStore(routes: EventRouting): InMemoryStore {
-  const clock = new SystemClock();
+/**
+ * `routes` is the application's EventRouter, created first and filled after wiring. The clock is the
+ * application's (tests replace it).
+ */
+export function createInMemoryStore(
+  routes: EventRouting,
+  clock: Clock = new SystemClock(),
+): InMemoryStore {
   const ids = new RandomIdGenerator();
   // `satisfies` keeps the literal types, so Object.values below is typed and every table of a
   // context automatically takes part in rollback.
@@ -52,12 +63,19 @@ export function createInMemoryStore(routes: EventRouting): InMemoryStore {
     wallets: new InMemoryTable<string, WalletRow>(),
     ledger: new InMemoryTable<string, LedgerRow>(),
   } satisfies GamificationTables;
+  const identity = {
+    users: new InMemoryTable<string, UserRow>(),
+  } satisfies IdentityTables;
   const uow = new InMemoryUnitOfWork({
     routes,
-    tables: [...Object.values(catalog), ...Object.values(gamification)],
+    tables: [
+      ...Object.values(catalog),
+      ...Object.values(gamification),
+      ...Object.values(identity),
+    ],
     outbox: new InMemoryTable<string, OutboxRecord>(),
     clock,
     ids,
   });
-  return { uow, clock, ids, catalog, gamification };
+  return { uow, clock, ids, catalog, gamification, identity };
 }

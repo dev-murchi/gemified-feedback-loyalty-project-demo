@@ -1,8 +1,11 @@
 import { Global, Module } from '@nestjs/common';
 import { ConsoleLogger } from '../shared-kernel/adapters/console-logger.js';
 import { EventRouter } from '../shared-kernel/adapters/event-router.js';
+import { SystemClock } from '../shared-kernel/adapters/system-clock.js';
+import type { Clock } from '../shared-kernel/clock.js';
 import { createInMemoryStore } from './in-memory-store.js';
 import {
+  CLOCK,
   EVENT_ROUTER,
   EVENT_ROUTES_CHECK,
   IN_MEMORY_STORE,
@@ -17,10 +20,12 @@ import {
 @Module({
   providers: [
     { provide: EVENT_ROUTER, useFactory: () => new EventRouter() },
+    { provide: CLOCK, useFactory: () => new SystemClock() },
     {
       provide: IN_MEMORY_STORE,
-      inject: [EVENT_ROUTER],
-      useFactory: (router: EventRouter) => createInMemoryStore(router),
+      inject: [EVENT_ROUTER, CLOCK],
+      useFactory: (router: EventRouter, clock: Clock) =>
+        createInMemoryStore(router, clock),
     },
     { provide: LOGGER, useFactory: () => new ConsoleLogger() },
     {
@@ -39,6 +44,6 @@ import {
       }),
     },
   ],
-  exports: [EVENT_ROUTER, IN_MEMORY_STORE, LOGGER],
+  exports: [CLOCK, EVENT_ROUTER, IN_MEMORY_STORE, LOGGER],
 })
 export class PersistenceModule {}

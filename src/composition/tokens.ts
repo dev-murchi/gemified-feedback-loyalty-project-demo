@@ -2,6 +2,7 @@
 // depend on decorator metadata.
 
 export const EVENT_ROUTER = Symbol('EventRouter');
+export const CLOCK = Symbol('Clock');
 export const IN_MEMORY_STORE = Symbol('InMemoryStore');
 export const LOGGER = Symbol('Logger');
 export const EVENT_ROUTES = Symbol('EventRoutes');
@@ -18,3 +19,11 @@ export const OPEN_WALLET = Symbol('OpenWallet');
 export const AWARD_REWARD = Symbol('AwardReward');
 export const GET_WALLET = Symbol('GetWallet');
 export const REWARD_LOOKUP = Symbol('RewardLookup');
+
+export const USER_REPOSITORY = Symbol('UserRepository');
+export const CHALLENGE_STORE = Symbol('ChallengeStore');
+export const ATTESTATION_VERIFIER = Symbol('AttestationVerifier');
+export const SESSION_PROOF_VERIFIER = Symbol('SessionProofVerifier');
+export const SIGNING_KEY = Symbol('SigningKey');
+export const ACCESS_TOKENS = Symbol('AccessTokens');
+export const AUTHENTICATE_REQUEST = Symbol('AuthenticateRequest');
