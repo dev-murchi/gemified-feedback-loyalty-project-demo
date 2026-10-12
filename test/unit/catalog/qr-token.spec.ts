@@ -1,7 +1,7 @@
 import {
   QR_TOKEN_BYTES,
   QrToken,
-} from '../../../src/catalog/domain/branch/qr-token.js';
+} from '../../../src/contexts/catalog/domain/branch/qr-token.js';
 import { SequentialRandomSource } from '../../support/sequential-random-source.js';
 
 /** Same pattern as FeedbackSubmission.qrToken in docs/api/openapi.yaml. */

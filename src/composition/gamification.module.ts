@@ -1,12 +1,12 @@
 import { Module } from '@nestjs/common';
-import { MemoryWalletRepository } from '../gamification/adapters/outbound/memory-wallet.repository.js';
-import type { WalletRepository } from '../gamification/application/ports/wallet-repository.js';
-import { AwardReward } from '../gamification/application/use-cases/award-reward.js';
-import { GetWallet } from '../gamification/application/use-cases/get-wallet.js';
-import { LookupReward } from '../gamification/application/use-cases/lookup-reward.js';
-import { OpenWallet } from '../gamification/application/use-cases/open-wallet.js';
-import { LevelPolicy } from '../gamification/domain/level-policy.js';
-import { DEFAULT_REWARD_AMOUNTS } from '../gamification/domain/reward-amounts.js';
+import { MemoryWalletRepository } from '../contexts/gamification/adapters/outbound/memory-wallet.repository.js';
+import type { WalletRepository } from '../contexts/gamification/application/ports/wallet-repository.js';
+import { AwardReward } from '../contexts/gamification/application/use-cases/award-reward.js';
+import { GetWallet } from '../contexts/gamification/application/use-cases/get-wallet.js';
+import { LookupReward } from '../contexts/gamification/application/use-cases/lookup-reward.js';
+import { OpenWallet } from '../contexts/gamification/application/use-cases/open-wallet.js';
+import { LevelPolicy } from '../contexts/gamification/domain/level-policy.js';
+import { DEFAULT_REWARD_AMOUNTS } from '../contexts/gamification/domain/reward-amounts.js';
 import type { Logger } from '../shared-kernel/logger.js';
 import type { InMemoryStore } from './in-memory-store.js';
 import {

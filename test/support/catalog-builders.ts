@@ -4,15 +4,15 @@ import {
   Branch,
   type NewBranch,
   type QrIssuing,
-} from '../../src/catalog/domain/branch/branch.js';
+} from '../../src/contexts/catalog/domain/branch/branch.js';
 import {
   Brand,
   type BrandState,
-} from '../../src/catalog/domain/brand/brand.js';
+} from '../../src/contexts/catalog/domain/brand/brand.js';
 import {
   LabelSet,
   type NewLabelSet,
-} from '../../src/catalog/domain/label-set/label-set.js';
+} from '../../src/contexts/catalog/domain/label-set/label-set.js';
 import type { DomainError } from '../../src/shared-kernel/domain-error.js';
 import type { BranchId, BrandId } from '../../src/shared-kernel/ids.js';
 import type { Result } from '../../src/shared-kernel/result.js';

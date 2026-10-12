@@ -71,21 +71,22 @@ src/
                            # outbox record, repository-access keys, retryOnConflict
     adapters/              # InMemoryTable, InMemoryUnitOfWork, saveVersioned, EventRouter, SystemClock,
                            # RandomIdGenerator, CryptoRandomSource, ConsoleLogger
-  identity/public/         # user-registered.ts (event contract, written first in S0-06)
-  feedback/public/         # feedback-validated.ts (event contract, written first in S0-06)
-  catalog/
-    domain/                # sector, geo-point, topic-key; brand/, branch/ (QrCode, QrToken), label-set/
-    application/           # ports/ (repositories), use-cases/ (ResolveQr, ProvideLabelSet, RevokeQrCode)
-    adapters/
-      inbound/demo/        # demo catalog definition, generated snapshot, loader
-      outbound/            # memory-*.repository.ts
-    public/                # QrResolver, LabelSetProvider, CatalogSector
-  gamification/
-    domain/                # level-policy, reward-amounts; wallet/ (Wallet, LedgerEntry, ledger-access)
-    application/           # ports/ (WalletRepository), use-cases/ (OpenWallet, AwardReward, GetWallet,
-                           # LookupReward)
-    adapters/outbound/     # memory-wallet.repository.ts (wallets + append-only ledger)
-    public/                # RewardLookup
+  contexts/
+    identity/                # domain/events/user-registered.ts; public/ re-exports it
+    feedback/                # domain/events/feedback-validated.ts; public/ re-exports it
+    catalog/
+      domain/                # sector, geo-point, topic-key; brand/, branch/ (QrCode, QrToken), label-set/
+      application/           # ports/ (repositories), use-cases/ (ResolveQr, ProvideLabelSet, RevokeQrCode)
+      adapters/
+        inbound/demo/        # demo catalog definition, generated snapshot, loader
+        outbound/            # memory-*.repository.ts
+      public/                # QrResolver, LabelSetProvider, CatalogSector
+    gamification/
+      domain/                # level-policy, reward-amounts; wallet/ (Wallet, LedgerEntry, ledger-access)
+      application/           # ports/ (WalletRepository), use-cases/ (OpenWallet, AwardReward, GetWallet,
+                             # LookupReward)
+      adapters/outbound/     # memory-wallet.repository.ts (wallets + append-only ledger)
+      public/                # RewardLookup
 scripts/                   # check-mock.ts, generate-demo-catalog.ts
 test/
   support/                 # fakes, builders, in-memory harnesses
@@ -100,14 +101,19 @@ Target (`docs/07` §3). Each context's folders are created when that context is 
 src/
   shared-kernel/           # ports and types
     adapters/              # shared in-memory adapters (plain TypeScript)
-  <context>/               # identity, catalog, feedback, analysis, gamification, insights
-    domain/
-    application/
-      ports/
-    adapters/
-      inbound/
-      outbound/
-    public/                # the only folder other contexts may import
+  platform/
+    http/                  # shared HTTP infrastructure (S0-05 slice 4)
+  contexts/
+    <context>/             # identity, catalog, feedback, analysis, gamification, insights
+      domain/
+        events/            # published event types
+      application/
+        ports/
+        use-cases/
+      adapters/
+        inbound/
+        outbound/
+      public/              # the only folder other contexts may import
   composition/
   main.api.ts
   main.worker.ts           # S0-10
@@ -125,7 +131,7 @@ How a state change and its consequences end up in one transaction (ADR-014, ADR-
 4. When the work finishes, each event is looked up in the `EventRouter`: synchronous handlers run inside the same transaction; outbox-routed events (`FeedbackSubmitted`) become outbox records. An event without a route fails the transaction.
 5. If anything throws, every change is undone, outbox included.
 
-**Event routes.** Event types live with their publisher in `<context>/public/` (e.g. `identity/public/user-registered.ts`); consumers import them, never copy them. `PersistenceModule` creates the `EventRouter` before the store, because the unit of work needs routes, handlers need repositories, and repositories need the unit of work. Context modules export their handlers; only `src/composition/event-routes.ts` registers them, with keys typed from the event types (`register<UserRegistered>('UserRegistered', …)` does not compile with a wrong key or handler), and then freezes the router. Registering after the freeze, or the same type twice, throws; `routeFor` refuses to answer before the freeze; start-up fails if the routes were never frozen. Handlers run inside the publisher's unit of work and never retry themselves.
+**Event routes.** Event types are defined in the publisher's `domain/events/` (e.g. `contexts/identity/domain/events/user-registered.ts`, importing only the shared kernel) and re-exported, type only, from `<context>/public/`; consumers import them from `public/`, never copy them. `PersistenceModule` creates the `EventRouter` before the store, because the unit of work needs routes, handlers need repositories, and repositories need the unit of work. Context modules export their handlers; only `src/composition/event-routes.ts` registers them, with keys typed from the event types (`register<UserRegistered>('UserRegistered', …)` does not compile with a wrong key or handler), and then freezes the router. Registering after the freeze, or the same type twice, throws; `routeFor` refuses to answer before the freeze; start-up fails if the routes were never frozen. Handlers run inside the publisher's unit of work and never retry themselves.
 
 `OpenWallet` is deliberately not idempotent: a retry reruns the publisher's unit of work from rolled-back state, so a second `UserRegistered` for the same user can only be a bug (e.g. a reused user id getting someone else's wallet). It throws, and the registration rolls back with it. Awards, in contrast, can legitimately be delivered twice (TC-GAM-01), so "already awarded" is `ok`.
 
@@ -159,6 +165,7 @@ Adapters log through the shared-kernel `Logger` port (`warn(message, fields)`), 
 | Demo data (`adapters/inbound/demo/`) is imported only by the composition root                                                                       | dependency-cruiser `demo-data-only-from-composition`             | `.dependency-cruiser.cjs`               |
 | Demo data is never loaded in production (`DEMO_DATA=true` with `NODE_ENV=production` fails startup)                                                 | `isDemoDataEnabled` + e2e test                                   | `src/composition/demo-data.ts`          |
 | A context's access keys (`*-access.ts`) only in its own domain and outbound adapters                                                                | dependency-cruiser `context-access-only-in-domain-and-outbound`  | `.dependency-cruiser.cjs`               |
+| Event files (`domain/events/`) import only the shared kernel                                                                                        | dependency-cruiser `domain-events-only-shared-kernel`            | `.dependency-cruiser.cjs`               |
 | Event routes are registered only in `src/composition/event-routes.ts` and frozen before serving                                                     | Start-up check (`EVENT_ROUTES_CHECK`) + code review              | `src/composition/persistence.module.ts` |
 | Adapters log only through the `Logger` port, without personal data                                                                                  | Code review                                                      | `docs/07` §6                            |
 | No circular dependencies                                                                                                                            | dependency-cruiser `no-circular`                                 | `.dependency-cruiser.cjs`               |
@@ -182,7 +189,7 @@ Generate NestJS files with the CLI, then adjust them to the layout above. Spec f
 
 ```sh
 npx nest g module catalog composition --flat                     # src/composition/catalog.module.ts, registered in AppModule
-npx nest g controller feedback feedback/adapters/inbound --flat  # src/feedback/adapters/inbound/feedback.controller.ts
+npx nest g controller feedback contexts/feedback/adapters/inbound/http --flat  # src/contexts/feedback/adapters/inbound/http/feedback.controller.ts
 ```
 
 Use cases and ports are plain TypeScript; they are wired into NestJS in `composition/` with factory providers (`docs/07` §2).
@@ -210,6 +217,7 @@ Use cases and ports are plain TypeScript; they are wired into NestJS in `composi
 | Each ledger entry stores `xpTotalAfter` (SDD v1.2)                                                 | A feedback's level-up is derived from a fact that never changes                                                                                                                            |
 | A ledger entry's earning date is the feedback's `submittedAt`                                      | Points expiry counts from the customer's visit, and it is identical across retries                                                                                                         |
 | Only the named ledger-key constraint maps to `ConcurrencyConflictError`                            | A duplicate reward key is a concurrency symptom; every other unique violation is an infrastructure error                                                                                   |
+| Contexts under `src/contexts/`                                                                     | Rules match contexts by path; shared folders (`shared-kernel/`, `platform/`, `composition/`) never need exceptions                                                                         |
 
 ## Known gaps
 

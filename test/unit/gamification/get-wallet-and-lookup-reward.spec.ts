@@ -1,6 +1,6 @@
-import { GetWallet } from '../../../src/gamification/application/use-cases/get-wallet.js';
-import { LookupReward } from '../../../src/gamification/application/use-cases/lookup-reward.js';
-import { LevelPolicy } from '../../../src/gamification/domain/level-policy.js';
+import { GetWallet } from '../../../src/contexts/gamification/application/use-cases/get-wallet.js';
+import { LookupReward } from '../../../src/contexts/gamification/application/use-cases/lookup-reward.js';
+import { LevelPolicy } from '../../../src/contexts/gamification/domain/level-policy.js';
 import type { UserId } from '../../../src/shared-kernel/ids.js';
 import {
   aClaim,

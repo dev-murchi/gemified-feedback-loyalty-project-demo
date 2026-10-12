@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
-import type { FeedbackValidated } from '../feedback/public/feedback-validated.js';
-import type { UserRegistered } from '../identity/public/user-registered.js';
+import type { FeedbackValidated } from '../contexts/feedback/public/feedback-validated.js';
+import type { UserRegistered } from '../contexts/identity/public/user-registered.js';
 import type { EventRouter } from '../shared-kernel/adapters/event-router.js';
 import type { EventHandler } from '../shared-kernel/event-routing.js';
 import { registerEventRoutes } from './event-routes.js';

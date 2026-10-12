@@ -5,18 +5,18 @@
 // npm run demo:snapshot
 
 import { writeFileSync } from 'node:fs';
-import { demoCatalogDefinition } from '../src/catalog/adapters/inbound/demo/demo-catalog.definition.js';
-import { demoCatalogSnapshot } from '../src/catalog/adapters/inbound/demo/demo-catalog.snapshot.js';
+import { demoCatalogDefinition } from '../src/contexts/catalog/adapters/inbound/demo/demo-catalog.definition.js';
+import { demoCatalogSnapshot } from '../src/contexts/catalog/adapters/inbound/demo/demo-catalog.snapshot.js';
 import {
   completeDemoSnapshot,
   renderSnapshotModule,
-} from '../src/catalog/adapters/inbound/demo/demo-snapshot.js';
+} from '../src/contexts/catalog/adapters/inbound/demo/demo-snapshot.js';
 import { CryptoRandomSource } from '../src/shared-kernel/adapters/crypto-random-source.js';
 import { RandomIdGenerator } from '../src/shared-kernel/adapters/random-id-generator.js';
 import { SystemClock } from '../src/shared-kernel/adapters/system-clock.js';
 
 const target = new URL(
-  '../src/catalog/adapters/inbound/demo/demo-catalog.snapshot.ts',
+  '../src/contexts/catalog/adapters/inbound/demo/demo-catalog.snapshot.ts',
   import.meta.url,
 );
 

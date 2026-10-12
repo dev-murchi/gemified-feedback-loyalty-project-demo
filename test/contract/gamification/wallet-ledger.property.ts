@@ -2,7 +2,7 @@
 // the wallet repository contract, so it runs against PostgreSQL too (S0-11).
 
 import * as fc from 'fast-check';
-import { LevelPolicy } from '../../../src/gamification/domain/level-policy.js';
+import { LevelPolicy } from '../../../src/contexts/gamification/domain/level-policy.js';
 import { ConcurrencyConflictError } from '../../../src/shared-kernel/concurrency-conflict-error.js';
 import {
   aClaim,
@@ -13,7 +13,7 @@ import {
   WALLET_USER_ID,
 } from '../../support/gamification-builders.js';
 import type { GamificationHarness } from '../../support/memory-gamification.js';
-import { LedgerKey } from '../../../src/gamification/domain/wallet/ledger-entry.js';
+import { LedgerKey } from '../../../src/contexts/gamification/domain/wallet/ledger-entry.js';
 
 type Step =
   | {

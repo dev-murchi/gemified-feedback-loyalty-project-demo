@@ -1,5 +1,5 @@
-import { Branch } from '../../../src/catalog/domain/branch/branch.js';
-import type { QrToken } from '../../../src/catalog/domain/branch/qr-token.js';
+import { Branch } from '../../../src/contexts/catalog/domain/branch/branch.js';
+import type { QrToken } from '../../../src/contexts/catalog/domain/branch/qr-token.js';
 import type { BranchId } from '../../../src/shared-kernel/ids.js';
 import {
   aBranch,

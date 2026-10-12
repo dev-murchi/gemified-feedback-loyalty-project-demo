@@ -1,6 +1,6 @@
-import { ResolveQr } from '../../../src/catalog/application/use-cases/resolve-qr.js';
-import { RevokeQrCode } from '../../../src/catalog/application/use-cases/revoke-qr-code.js';
-import type { QrToken } from '../../../src/catalog/domain/branch/qr-token.js';
+import { ResolveQr } from '../../../src/contexts/catalog/application/use-cases/resolve-qr.js';
+import { RevokeQrCode } from '../../../src/contexts/catalog/application/use-cases/revoke-qr-code.js';
+import type { QrToken } from '../../../src/contexts/catalog/domain/branch/qr-token.js';
 import { aBranch, aBrand, BRANCH_ID } from '../../support/catalog-builders.js';
 import { ConcurrencyConflictError } from '../../../src/shared-kernel/concurrency-conflict-error.js';
 import { ConflictingBranchRepository } from '../../support/conflicting-branch-repository.js';

@@ -10,7 +10,7 @@ Demo kapsamındaki (SDD 11.1) beş modülün temel özelliklerini, Mühendislik 
 | --- | --- |
 | Başlangıç | 11 Ekim 2026 (sıfırdan) |
 | Zaman kutusu | Demo tarihi proje sahibiyle belirlenir; takım ilk günün sonunda hızını ölçüp kesme çizgisini (Bölüm 4) teyit eder |
-| Dayandığı dokümanlar | SDD v1.2 Bölüm 11, Alan Modeli v1.0, Mühendislik Standartları v1.9, Test Stratejisi v1.3 Bölüm 8 |
+| Dayandığı dokümanlar | SDD v1.2 Bölüm 11, Alan Modeli v1.1, Mühendislik Standartları v1.11, Test Stratejisi v1.3 Bölüm 8 |
 
 ## 2. Büyüklük ve Öncelik
 
@@ -21,7 +21,7 @@ Demo kapsamındaki (SDD 11.1) beş modülün temel özelliklerini, Mühendislik 
 
 Kalemler sırayla ele alınır; sıra, Clean Architecture geliştirme sırasını (ADR-017) izler.
 
-S0-06, S0-05'ten önce yapılır (proje sahibi kararı, 11 Ekim 2026): her kullanıcının var olduğu andan itibaren cüzdanı vardır. Kimlik doğrulamaya bağlı parçalar (`/v1/me/wallet`, kullanıcı ve cüzdanın aynı transaction'da oluştuğu test) S0-05'e taşındı. S0-06, yayıncıların olay sözleşmelerini önce yazar (yalnızca tipler, davranış yok): `src/identity/public/user-registered.ts` (`UserRegistered`) ve `src/feedback/public/feedback-validated.ts` (`FeedbackValidated`). Gamification bunları oradan içe aktarır; S0-05 ve S0-07 tam olarak bu tipleri yayınlar.
+S0-06, S0-05'ten önce yapılır (proje sahibi kararı, 11 Ekim 2026): her kullanıcının var olduğu andan itibaren cüzdanı vardır. Kimlik doğrulamaya bağlı parçalar (`/v1/me/wallet`, kullanıcı ve cüzdanın aynı transaction'da oluştuğu test) S0-05'e taşındı. S0-06, yayıncıların olay sözleşmelerini önce yazar (yalnızca tipler, davranış yok): `src/contexts/identity/public/user-registered.ts` (`UserRegistered`) ve `src/contexts/feedback/public/feedback-validated.ts` (`FeedbackValidated`). Gamification bunları oradan içe aktarır; S0-05 ve S0-07 tam olarak bu tipleri yayınlar.
 
 | ID | Kalem | Büyüklük | Öncelik | Bağımlılık |
 | --- | --- | --- | --- | --- |
@@ -63,7 +63,7 @@ S0-06, S0-05'ten önce yapılır (proje sahibi kararı, 11 Ekim 2026): her kulla
 
 ### S0-06 Gamification context'i
 
-- **İçerik:** Yayıncıların olay sözleşmeleri (yalnızca tipler): `src/identity/public/user-registered.ts`, `src/feedback/public/feedback-validated.ts`; `Wallet`, ledger kayıtları, `LevelPolicy`; `UserRegistered` ile cüzdan açma (`OpenWallet`), `FeedbackValidated` ile ödül verme (`AwardReward`); `RewardLookup`; `GetWallet` use case'i; olay yönlendirmeleri (`src/composition/event-routes.ts`: `UserRegistered` → `OpenWallet`, `FeedbackValidated` → `AwardReward`).
+- **İçerik:** Yayıncıların olay sözleşmeleri (yalnızca tipler): `src/contexts/identity/public/user-registered.ts`, `src/contexts/feedback/public/feedback-validated.ts`; `Wallet`, ledger kayıtları, `LevelPolicy`; `UserRegistered` ile cüzdan açma (`OpenWallet`), `FeedbackValidated` ile ödül verme (`AwardReward`); `RewardLookup`; `GetWallet` use case'i; olay yönlendirmeleri (`src/composition/event-routes.ts`: `UserRegistered` → `OpenWallet`, `FeedbackValidated` → `AwardReward`).
 - **Bitiş kriterleri:** TC-GAM-01, 04, 05; bağlanmış composition üzerinden yayınlanan `UserRegistered` olayının aynı unit of work içinde cüzdan açtığını ve `OpenWallet` başarısız olursa her şeyin geri alındığını gösteren test.
 
 ### S0-05 Identity context'i

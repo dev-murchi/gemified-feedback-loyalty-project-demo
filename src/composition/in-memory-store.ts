@@ -1,10 +1,10 @@
-import type { BrandRow } from '../catalog/adapters/outbound/memory-brand.repository.js';
-import type { BranchRow } from '../catalog/adapters/outbound/memory-branch.repository.js';
-import type { LabelSetRow } from '../catalog/adapters/outbound/memory-label-set.repository.js';
+import type { BrandRow } from '../contexts/catalog/adapters/outbound/memory-brand.repository.js';
+import type { BranchRow } from '../contexts/catalog/adapters/outbound/memory-branch.repository.js';
+import type { LabelSetRow } from '../contexts/catalog/adapters/outbound/memory-label-set.repository.js';
 import type {
   LedgerRow,
   WalletRow,
-} from '../gamification/adapters/outbound/memory-wallet.repository.js';
+} from '../contexts/gamification/adapters/outbound/memory-wallet.repository.js';
 import { InMemoryTable } from '../shared-kernel/adapters/in-memory-table.js';
 import { InMemoryUnitOfWork } from '../shared-kernel/adapters/in-memory-unit-of-work.js';
 import { RandomIdGenerator } from '../shared-kernel/adapters/random-id-generator.js';

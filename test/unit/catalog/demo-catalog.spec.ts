@@ -1,16 +1,16 @@
 // Demo data checks. Only this file and the composition root may touch the demo folder; other
 // tests build their data with test/support/catalog-builders.ts.
 
-import { demoCatalogDefinition } from '../../../src/catalog/adapters/inbound/demo/demo-catalog.definition.js';
-import { loadDemoCatalog } from '../../../src/catalog/adapters/inbound/demo/demo-catalog-loader.js';
-import { demoCatalogSnapshot } from '../../../src/catalog/adapters/inbound/demo/demo-catalog.snapshot.js';
+import { demoCatalogDefinition } from '../../../src/contexts/catalog/adapters/inbound/demo/demo-catalog.definition.js';
+import { loadDemoCatalog } from '../../../src/contexts/catalog/adapters/inbound/demo/demo-catalog-loader.js';
+import { demoCatalogSnapshot } from '../../../src/contexts/catalog/adapters/inbound/demo/demo-catalog.snapshot.js';
 import {
   completeDemoSnapshot,
   type DemoCatalogSnapshot,
-} from '../../../src/catalog/adapters/inbound/demo/demo-snapshot.js';
-import { ResolveQr } from '../../../src/catalog/application/use-cases/resolve-qr.js';
-import type { QrIssuing } from '../../../src/catalog/domain/branch/branch.js';
-import { LabelSet } from '../../../src/catalog/domain/label-set/label-set.js';
+} from '../../../src/contexts/catalog/adapters/inbound/demo/demo-snapshot.js';
+import { ResolveQr } from '../../../src/contexts/catalog/application/use-cases/resolve-qr.js';
+import type { QrIssuing } from '../../../src/contexts/catalog/domain/branch/branch.js';
+import { LabelSet } from '../../../src/contexts/catalog/domain/label-set/label-set.js';
 import type { BrandId } from '../../../src/shared-kernel/ids.js';
 import { FakeClock } from '../../support/fake-clock.js';
 import { memoryCatalogHarness } from '../../support/memory-catalog.js';

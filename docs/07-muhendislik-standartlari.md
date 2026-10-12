@@ -8,8 +8,8 @@ Bu doküman, kodun nasıl yazılacağını tanımlar: Clean Architecture katmanl
 
 | Alan | Değer |
 | --- | --- |
-| Sürüm | 1.9 |
-| Dayandığı dokümanlar | SDD v1.2, Alan Modeli v1.0, Test Stratejisi v1.3 |
+| Sürüm | 1.11 |
+| Dayandığı dokümanlar | SDD v1.2, Alan Modeli v1.1, Test Stratejisi v1.3 |
 | Değişiklik (1.1) | Test aracı Jest yerine Vitest: NestJS 12 yalnızca ESM; Vitest ESM'i doğal olarak destekler; dependency-cruiser'a `shared-kernel-is-pure` kuralı eklendi (shared kernel'i her domain dolaylı olarak içe aktarır) |
 | Değişiklik (1.2) | `shared-kernel/adapters/` (paylaşılan bellek içi UnitOfWork ve sistem saati) ve `test/support/` (FakeClock) eklendi; dependency-cruiser'a `core-does-not-use-shared-adapters` kuralı eklendi |
 | Değişiklik (1.3) | Olay erişim anahtarı (`takeEvents`, `src/shared-kernel/repository-access.ts`) ve `repository-access-only-in-outbound-adapters` kuralı; `InMemoryTable` satırları kopyalar; save sonrası sürüm kuralı (markSaved; uygulama S0-04) |
@@ -19,6 +19,8 @@ Bu doküman, kodun nasıl yazılacağını tanımlar: Clean Architecture katmanl
 | Değişiklik (1.7) | Ledger idempotency anahtarı kısıtı adıyla eşleştirilip `ConcurrencyConflictError`'a çevrilir; diğer benzersizlik ihlalleri altyapı hatası olarak kalır |
 | Değişiklik (1.8) | Context'e özgü erişim anahtarları (`*-access.ts`) ve `context-access-only-in-domain-and-outbound` kuralı; olay yönlendirmeleri yalnızca `src/composition/event-routes.ts` dosyasında, kayıttan sonra dondurulur |
 | Değişiklik (1.9) | Loglama shared kernel'deki `Logger` port'u üzerinden; alanlarda kişisel veri yok; testler `RecordingLogger` sahtesiyle |
+| Değişiklik (1.10) | Yayınlanan olay tipleri `domain/events/` içinde tanımlanır, `public/` yalnızca yeniden dışa aktarır; `domain-events-only-shared-kernel` kuralı |
+| Değişiklik (1.11) | Context'ler `src/contexts/` altına taşındı; `src/platform/` ortak altyapı; kural desenleri güncellendi; `platform-imports-no-context` kuralı |
 | Kapsam | `src/` ve `test/` altındaki tüm kod |
 
 **Temel hedefler:**
@@ -39,7 +41,9 @@ Bu doküman, kodun nasıl yazılacağını tanımlar: Clean Architecture katmanl
 
 **Framework'ten bağımsızlık:** Domain ve application katmanlarında hiçbir dış paket kullanılmaz: NestJS dekoratörleri, veritabanı sürücüleri, doğrulama kütüphaneleri ve Node.js'in yerleşik modülleri de buna dahildir. Rastgelelik, zaman ve kriptografi gibi yetenekler port üzerinden alınır (`Clock`, `IdGenerator`, `RandomSource`). Use case'ler ve port'lar düz TypeScript sınıfları ve arayüzleridir; NestJS'e composition katmanında, fabrika sağlayıcılarıyla bağlanır.
 
-**Context'ler arası kural:** Bir context, başka bir context'in yalnızca `public` klasörünü kullanabilir. `public` klasörü yayınlanan olayları, open host service arayüzlerini ve bunların tiplerini içerir; aggregate'ler, use case'ler ve adapter'lar asla dışarı açılmaz.
+**Context'ler arası kural:** Bounded context'ler `src/contexts/<context>/` altındadır; `src/` altındaki diğer klasörler (`shared-kernel/`, `platform/`, `composition/`) context değildir. Bir context, başka bir context'in yalnızca `public` klasörünü kullanabilir. `public` klasörü yayınlanan olayları, open host service arayüzlerini ve bunların tiplerini içerir; aggregate'ler, use case'ler ve adapter'lar asla dışarı açılmaz. Yayınlanan olay tipleri context'in `domain/events/` klasöründe tanımlanır; `public/` bunları yalnızca yeniden dışa aktarır.
+
+**Platform:** `src/platform/`, context'lerden bağımsız ve framework'e bağlı ortak inbound altyapıdır (ör. `platform/http/`: Problem Details, hata kodu → HTTP tablosu, `X-Request-Id`, gövde sınırı, Zod yardımcısı, bearer guard). Context'lerin adapter'ları ve composition kullanabilir; domain ve application kullanamaz; platform hiçbir context'i içe aktarmaz.
 
 ## 3. Klasör Yapısı
 
@@ -47,19 +51,23 @@ Bu doküman, kodun nasıl yazılacağını tanımlar: Clean Architecture katmanl
 src/
   shared-kernel/           # tipli kimlikler, Clock, Result, DomainEvent, DomainError, UnitOfWork (port ve tipler)
     adapters/              # paylaşılan bellek içi UnitOfWork ve sistem saati (saf TypeScript)
-  identity/
-    domain/
-      <aggregate>/         # aggregate kökü, ona ait entity'ler, değer nesneleri, olaylar ve hatalar (ör. branch/)
-      <ortak>.ts           # birden çok aggregate'in kullandığı değer nesneleri ve domain servisleri (ör. sector.ts)
-    application/
-      ports/               # driven port arayüzleri
-      use-cases/           # her use case ve open host service uygulaması kendi dosyasında
-    adapters/
-      inbound/             # http, kuyruk tüketicisi, zamanlanmış iş
-        demo/              # yalnızca demo verisi; yalnızca composition kullanır, üretimde yüklenmez
-      outbound/            # postgres, memory, redis, llm, attestation, crypto
-    public/                # yayınlanan olaylar ve open host service arayüzleri
-  catalog/ feedback/ analysis/ gamification/ insights/   # aynı yapı
+  platform/
+    http/                  # ortak HTTP altyapısı (NestJS, Zod); yalnızca adapter'lar ve composition kullanır
+  contexts/
+    identity/
+      domain/
+        <aggregate>/       # aggregate kökü, ona ait entity'ler, değer nesneleri, olaylar ve hatalar (ör. branch/)
+        <ortak>.ts         # birden çok aggregate'in kullandığı değer nesneleri ve domain servisleri (ör. sector.ts)
+        events/            # yayınlanan olayların tipleri; public/ yalnızca yeniden dışa aktarır
+      application/
+        ports/             # driven port arayüzleri
+        use-cases/         # her use case ve open host service uygulaması kendi dosyasında
+      adapters/
+        inbound/           # http, kuyruk tüketicisi, zamanlanmış iş
+          demo/            # yalnızca demo verisi; yalnızca composition kullanır, üretimde yüklenmez
+        outbound/          # postgres, memory, redis, llm, attestation, crypto
+      public/              # yayınlanan olaylar ve open host service arayüzleri
+    catalog/ feedback/ analysis/ gamification/ insights/   # aynı yapı
   composition/             # NestJS modülleri, DI bağlama, yapılandırma
   main.api.ts
   main.worker.ts
@@ -196,29 +204,35 @@ rules: {
 forbidden: [
   { name: 'no-circular', severity: 'error', from: {}, to: { circular: true } },
   { name: 'domain-is-pure', severity: 'error',
-    from: { path: '^src/([^/]+)/domain/' },
-    to: { pathNot: ['^src/$1/domain/', '^src/shared-kernel/'] } },
+    from: { path: '^src/contexts/([^/]+)/domain/' },
+    to: { pathNot: ['^src/contexts/$1/domain/', '^src/shared-kernel/'] } },
   { name: 'application-has-no-infrastructure', severity: 'error',
-    from: { path: '^src/([^/]+)/application/' },
-    to: { pathNot: ['^src/$1/(domain|application)/', '^src/shared-kernel/', '^src/[^/]+/public/'] } },
+    from: { path: '^src/contexts/([^/]+)/application/' },
+    to: { pathNot: ['^src/contexts/$1/(domain|application)/', '^src/shared-kernel/', '^src/contexts/[^/]+/public/'] } },
   { name: 'only-public-across-contexts', severity: 'error',
-    from: { path: '^src/([^/]+)/', pathNot: '^src/(composition|shared-kernel)/' },
-    to: { path: '^src/[^/]+/', pathNot: ['^src/$1/', '^src/shared-kernel/', '^src/[^/]+/public/'] } },
+    from: { path: '^src/contexts/([^/]+)/' },
+    to: { path: '^src/contexts/', pathNot: ['^src/contexts/$1/', '^src/contexts/[^/]+/public/'] } },
   { name: 'shared-kernel-is-pure', severity: 'error',
     from: { path: '^src/shared-kernel/' },
     to: { pathNot: '^src/shared-kernel/' } },
   { name: 'core-does-not-use-shared-adapters', severity: 'error',
-    from: { path: ['^src/[^/]+/(domain|application)/', '^src/shared-kernel/(?!adapters/)'] },
+    from: { path: ['^src/contexts/[^/]+/(domain|application)/', '^src/shared-kernel/(?!adapters/)'] },
     to: { path: '^src/shared-kernel/adapters/' } },
   { name: 'repository-access-only-in-outbound-adapters', severity: 'error',
-    from: { pathNot: ['^src/shared-kernel/aggregate-root\\.ts$', '^src/[^/]+/adapters/outbound/', '^src/shared-kernel/adapters/'] },
+    from: { pathNot: ['^src/shared-kernel/aggregate-root\\.ts$', '^src/contexts/[^/]+/adapters/outbound/', '^src/shared-kernel/adapters/'] },
     to: { path: '^src/shared-kernel/repository-access\\.ts$' } },
   { name: 'demo-data-only-from-composition', severity: 'error',
-    from: { pathNot: ['^src/composition/', '^src/[^/]+/adapters/inbound/demo/'] },
-    to: { path: '^src/[^/]+/adapters/inbound/demo/' } },
+    from: { pathNot: ['^src/composition/', '^src/contexts/[^/]+/adapters/inbound/demo/'] },
+    to: { path: '^src/contexts/[^/]+/adapters/inbound/demo/' } },
   { name: 'context-access-only-in-domain-and-outbound', severity: 'error',
-    from: { path: '^src/', pathNot: ['^src/[^/]+/domain/', '^src/[^/]+/adapters/outbound/'] },
-    to: { path: '^src/[^/]+/domain/.+-access\\.ts$' } },
+    from: { path: '^src/', pathNot: ['^src/contexts/[^/]+/domain/', '^src/contexts/[^/]+/adapters/outbound/'] },
+    to: { path: '^src/contexts/[^/]+/domain/.+-access\\.ts$' } },
+  { name: 'domain-events-only-shared-kernel', severity: 'error',
+    from: { path: '^src/contexts/[^/]+/domain/events/' },
+    to: { pathNot: '^src/shared-kernel/' } },
+  { name: 'platform-imports-no-context', severity: 'error',
+    from: { path: '^src/platform/' },
+    to: { path: '^src/', pathNot: ['^src/platform/', '^src/shared-kernel/'] } },
 ]
 ```
 

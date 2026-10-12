@@ -1,5 +1,5 @@
-import { ResolveQr } from '../../../src/catalog/application/use-cases/resolve-qr.js';
-import type { QrToken } from '../../../src/catalog/domain/branch/qr-token.js';
+import { ResolveQr } from '../../../src/contexts/catalog/application/use-cases/resolve-qr.js';
+import type { QrToken } from '../../../src/contexts/catalog/domain/branch/qr-token.js';
 import {
   aBranch,
   aBrand,

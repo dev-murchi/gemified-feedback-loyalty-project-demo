@@ -1,9 +1,9 @@
-import type { WalletRepository } from '../../src/gamification/application/ports/wallet-repository.js';
+import type { WalletRepository } from '../../src/contexts/gamification/application/ports/wallet-repository.js';
 import type {
   LedgerEntry,
   LedgerKey,
-} from '../../src/gamification/domain/wallet/ledger-entry.js';
-import { Wallet } from '../../src/gamification/domain/wallet/wallet.js';
+} from '../../src/contexts/gamification/domain/wallet/ledger-entry.js';
+import { Wallet } from '../../src/contexts/gamification/domain/wallet/wallet.js';
 import type { UserId } from '../../src/shared-kernel/ids.js';
 
 /**

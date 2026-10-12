@@ -1,11 +1,11 @@
 import { Module } from '@nestjs/common';
-import { loadDemoCatalog } from '../catalog/adapters/inbound/demo/demo-catalog-loader.js';
-import { MemoryBrandRepository } from '../catalog/adapters/outbound/memory-brand.repository.js';
-import { MemoryBranchRepository } from '../catalog/adapters/outbound/memory-branch.repository.js';
-import { MemoryLabelSetRepository } from '../catalog/adapters/outbound/memory-label-set.repository.js';
-import { ProvideLabelSet } from '../catalog/application/use-cases/provide-label-set.js';
-import { ResolveQr } from '../catalog/application/use-cases/resolve-qr.js';
-import { RevokeQrCode } from '../catalog/application/use-cases/revoke-qr-code.js';
+import { loadDemoCatalog } from '../contexts/catalog/adapters/inbound/demo/demo-catalog-loader.js';
+import { MemoryBrandRepository } from '../contexts/catalog/adapters/outbound/memory-brand.repository.js';
+import { MemoryBranchRepository } from '../contexts/catalog/adapters/outbound/memory-branch.repository.js';
+import { MemoryLabelSetRepository } from '../contexts/catalog/adapters/outbound/memory-label-set.repository.js';
+import { ProvideLabelSet } from '../contexts/catalog/application/use-cases/provide-label-set.js';
+import { ResolveQr } from '../contexts/catalog/application/use-cases/resolve-qr.js';
+import { RevokeQrCode } from '../contexts/catalog/application/use-cases/revoke-qr-code.js';
 import { isDemoDataEnabled } from './demo-data.js';
 import type { InMemoryStore } from './in-memory-store.js';
 import {

@@ -1,4 +1,5 @@
 // Layer and context rules from docs/07-muhendislik-standartlari.md §2 and §8.
+// Bounded contexts live in src/contexts/<context>/; everything else under src/ is shared or wiring.
 /** @type {import('dependency-cruiser').IConfiguration} */
 module.exports = {
   forbidden: [
@@ -11,31 +12,28 @@ module.exports = {
     {
       name: 'domain-is-pure',
       severity: 'error',
-      from: { path: '^src/([^/]+)/domain/' },
-      to: { pathNot: ['^src/$1/domain/', '^src/shared-kernel/'] },
+      from: { path: '^src/contexts/([^/]+)/domain/' },
+      to: { pathNot: ['^src/contexts/$1/domain/', '^src/shared-kernel/'] },
     },
     {
       name: 'application-has-no-infrastructure',
       severity: 'error',
-      from: { path: '^src/([^/]+)/application/' },
+      from: { path: '^src/contexts/([^/]+)/application/' },
       to: {
         pathNot: [
-          '^src/$1/(domain|application)/',
+          '^src/contexts/$1/(domain|application)/',
           '^src/shared-kernel/',
-          '^src/[^/]+/public/',
+          '^src/contexts/[^/]+/public/',
         ],
       },
     },
     {
       name: 'only-public-across-contexts',
       severity: 'error',
-      from: {
-        path: '^src/([^/]+)/',
-        pathNot: '^src/(composition|shared-kernel)/',
-      },
+      from: { path: '^src/contexts/([^/]+)/' },
       to: {
-        path: '^src/[^/]+/',
-        pathNot: ['^src/$1/', '^src/shared-kernel/', '^src/[^/]+/public/'],
+        path: '^src/contexts/',
+        pathNot: ['^src/contexts/$1/', '^src/contexts/[^/]+/public/'],
       },
     },
     {
@@ -49,7 +47,7 @@ module.exports = {
       severity: 'error',
       from: {
         path: [
-          '^src/[^/]+/(domain|application)/',
+          '^src/contexts/[^/]+/(domain|application)/',
           '^src/shared-kernel/(?!adapters/)',
         ],
       },
@@ -61,7 +59,7 @@ module.exports = {
       from: {
         pathNot: [
           '^src/shared-kernel/aggregate-root\\.ts$',
-          '^src/[^/]+/adapters/outbound/',
+          '^src/contexts/[^/]+/adapters/outbound/',
           '^src/shared-kernel/adapters/',
         ],
       },
@@ -71,18 +69,36 @@ module.exports = {
       name: 'demo-data-only-from-composition',
       severity: 'error',
       from: {
-        pathNot: ['^src/composition/', '^src/[^/]+/adapters/inbound/demo/'],
+        pathNot: [
+          '^src/composition/',
+          '^src/contexts/[^/]+/adapters/inbound/demo/',
+        ],
       },
-      to: { path: '^src/[^/]+/adapters/inbound/demo/' },
+      to: { path: '^src/contexts/[^/]+/adapters/inbound/demo/' },
     },
     {
       name: 'context-access-only-in-domain-and-outbound',
       severity: 'error',
       from: {
         path: '^src/',
-        pathNot: ['^src/[^/]+/domain/', '^src/[^/]+/adapters/outbound/'],
+        pathNot: [
+          '^src/contexts/[^/]+/domain/',
+          '^src/contexts/[^/]+/adapters/outbound/',
+        ],
       },
-      to: { path: '^src/[^/]+/domain/.+-access\\.ts$' },
+      to: { path: '^src/contexts/[^/]+/domain/.+-access\\.ts$' },
+    },
+    {
+      name: 'domain-events-only-shared-kernel',
+      severity: 'error',
+      from: { path: '^src/contexts/[^/]+/domain/events/' },
+      to: { pathNot: '^src/shared-kernel/' },
+    },
+    {
+      name: 'platform-imports-no-context',
+      severity: 'error',
+      from: { path: '^src/platform/' },
+      to: { path: '^src/', pathNot: ['^src/platform/', '^src/shared-kernel/'] },
     },
   ],
   options: {

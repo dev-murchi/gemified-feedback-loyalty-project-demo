@@ -8,8 +8,9 @@ Bu doküman, SDD'deki mimariyi Domain-Driven Design ile kodlanabilir hale getiri
 
 | Alan | Değer |
 | --- | --- |
-| Sürüm | 1.0 |
-| Dayandığı dokümanlar | SRS v1.5, SDD v1.2, API sözleşmesi 0.2.1-demo |
+| Sürüm | 1.1 |
+| Dayandığı dokümanlar | SRS v1.5, SDD v1.2, API sözleşmesi 0.2.2-demo |
+| Değişiklik (1.1) | Olay tiplerinin yeri: domain/events/, public/ yalnızca yeniden dışa aktarır |
 
 ## 2. Bounded Context'ler
 
@@ -213,6 +214,7 @@ Yalnızca bir tüketicisi olan olaylar tanımlanır; kullanılmayan olay yazılm
 - Senkron olay işleyicileri, olayı üreten işlemle aynı unit of work içinde çalışır; biri hata verirse tamamı geri alınır (ADR-020).
 - Bir iş akışında en fazla bir asenkron sınır vardır: `FeedbackSubmitted`. Asenkron olaylar yalnızca outbox üzerinden yayınlanır (ADR-005).
 - Olaylar geçmiş zaman kipinde adlandırılır ve değişmez değer nesneleridir.
+- Olay tipleri yayıncı context'in domain'inde tanımlanır (`src/contexts/<context>/domain/events/`); `<context>/public/` yalnızca tipi yeniden dışa aktarır (`export type { … }`). Tüketiciler olayı yalnızca yayıncının `public/` klasöründen içe aktarır, kendi kopyasını yazmaz. Olay dosyaları yalnızca shared kernel'i (tipli kimlikler, `DomainEvent`, `Date` ve ilkel tipler) kullanır; context'in kendi değer nesnelerini içe aktarmaz.
 - `FinalizeUnanalyzedFeedback`, 24 saatin sonunda `FeedbackAnalyzed` yerine doğrudan `FeedbackValidated` üretir (FR-AI-09 koşullarıyla).
 
 ## 7. Transaction Sınırları

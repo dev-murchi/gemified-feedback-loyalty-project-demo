@@ -1,4 +1,4 @@
-import { ProvideLabelSet } from '../../../src/catalog/application/use-cases/provide-label-set.js';
+import { ProvideLabelSet } from '../../../src/contexts/catalog/application/use-cases/provide-label-set.js';
 import { aLabelSet } from '../../support/catalog-builders.js';
 import {
   memoryCatalogHarness,

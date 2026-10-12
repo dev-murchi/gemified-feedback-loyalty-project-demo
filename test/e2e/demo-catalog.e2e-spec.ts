@@ -1,6 +1,6 @@
 import { Test } from '@nestjs/testing';
-import { demoCatalogSnapshot } from '../../src/catalog/adapters/inbound/demo/demo-catalog.snapshot.js';
-import type { QrResolver } from '../../src/catalog/public/qr-resolver.js';
+import { demoCatalogSnapshot } from '../../src/contexts/catalog/adapters/inbound/demo/demo-catalog.snapshot.js';
+import type { QrResolver } from '../../src/contexts/catalog/public/qr-resolver.js';
 import { AppModule } from '../../src/composition/app.module.js';
 import { QR_RESOLVER } from '../../src/composition/tokens.js';
 

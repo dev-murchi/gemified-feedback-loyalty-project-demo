@@ -3,9 +3,9 @@ import {
   toLedgerEntry,
   type LedgerRow,
   type WalletRow,
-} from '../../src/gamification/adapters/outbound/memory-wallet.repository.js';
-import type { WalletRepository } from '../../src/gamification/application/ports/wallet-repository.js';
-import type { LedgerEntry } from '../../src/gamification/domain/wallet/ledger-entry.js';
+} from '../../src/contexts/gamification/adapters/outbound/memory-wallet.repository.js';
+import type { WalletRepository } from '../../src/contexts/gamification/application/ports/wallet-repository.js';
+import type { LedgerEntry } from '../../src/contexts/gamification/domain/wallet/ledger-entry.js';
 import { InMemoryTable } from '../../src/shared-kernel/adapters/in-memory-table.js';
 import { EventRouter } from '../../src/shared-kernel/adapters/event-router.js';
 import { InMemoryUnitOfWork } from '../../src/shared-kernel/adapters/in-memory-unit-of-work.js';

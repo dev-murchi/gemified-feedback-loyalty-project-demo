@@ -1,12 +1,12 @@
 // S0-06 done criterion, through the wired composition: the real AppModule and its event routes.
 
 import { Test, type TestingModule } from '@nestjs/testing';
-import type { BrandRepository } from '../../src/catalog/application/ports/brand-repository.js';
-import type { FeedbackValidated } from '../../src/feedback/public/feedback-validated.js';
-import type { WalletRepository } from '../../src/gamification/application/ports/wallet-repository.js';
-import type { GetWallet } from '../../src/gamification/application/use-cases/get-wallet.js';
-import type { RewardLookup } from '../../src/gamification/public/reward-lookup.js';
-import type { UserRegistered } from '../../src/identity/public/user-registered.js';
+import type { BrandRepository } from '../../src/contexts/catalog/application/ports/brand-repository.js';
+import type { FeedbackValidated } from '../../src/contexts/feedback/public/feedback-validated.js';
+import type { WalletRepository } from '../../src/contexts/gamification/application/ports/wallet-repository.js';
+import type { GetWallet } from '../../src/contexts/gamification/application/use-cases/get-wallet.js';
+import type { RewardLookup } from '../../src/contexts/gamification/public/reward-lookup.js';
+import type { UserRegistered } from '../../src/contexts/identity/public/user-registered.js';
 import { AppModule } from '../../src/composition/app.module.js';
 import type { InMemoryStore } from '../../src/composition/in-memory-store.js';
 import {

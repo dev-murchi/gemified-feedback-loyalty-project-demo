@@ -1,7 +1,7 @@
 import {
   DEFAULT_REWARD_AMOUNTS,
   RewardAmounts,
-} from '../../../src/gamification/domain/reward-amounts.js';
+} from '../../../src/contexts/gamification/domain/reward-amounts.js';
 
 describe('RewardAmounts (FR-GAM-01)', () => {
   it('defaults to 10 XP and 5 points', () => {

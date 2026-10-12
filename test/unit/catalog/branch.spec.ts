@@ -1,8 +1,8 @@
 import {
   Branch,
   type QrIssuing,
-} from '../../../src/catalog/domain/branch/branch.js';
-import type { QrToken } from '../../../src/catalog/domain/branch/qr-token.js';
+} from '../../../src/contexts/catalog/domain/branch/branch.js';
+import type { QrToken } from '../../../src/contexts/catalog/domain/branch/qr-token.js';
 import {
   aBranch,
   BRANCH_ID,

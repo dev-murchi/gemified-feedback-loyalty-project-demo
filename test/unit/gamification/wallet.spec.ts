@@ -1,11 +1,11 @@
-import { LevelPolicy } from '../../../src/gamification/domain/level-policy.js';
-import { DEFAULT_REWARD_AMOUNTS } from '../../../src/gamification/domain/reward-amounts.js';
-import { LedgerKey } from '../../../src/gamification/domain/wallet/ledger-entry.js';
+import { LevelPolicy } from '../../../src/contexts/gamification/domain/level-policy.js';
+import { DEFAULT_REWARD_AMOUNTS } from '../../../src/contexts/gamification/domain/reward-amounts.js';
+import { LedgerKey } from '../../../src/contexts/gamification/domain/wallet/ledger-entry.js';
 import {
   Wallet,
   type RewardClaim,
   type RewardRules,
-} from '../../../src/gamification/domain/wallet/wallet.js';
+} from '../../../src/contexts/gamification/domain/wallet/wallet.js';
 import type { FeedbackId, UserId } from '../../../src/shared-kernel/ids.js';
 import { FakeClock } from '../../support/fake-clock.js';
 import { takeUnsavedEntries } from '../../support/gamification-access.js';

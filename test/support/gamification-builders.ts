@@ -1,13 +1,13 @@
 // Small builders for Gamification tests.
 
-import { DEFAULT_REWARD_AMOUNTS } from '../../src/gamification/domain/reward-amounts.js';
-import { LedgerKey } from '../../src/gamification/domain/wallet/ledger-entry.js';
+import { DEFAULT_REWARD_AMOUNTS } from '../../src/contexts/gamification/domain/reward-amounts.js';
+import { LedgerKey } from '../../src/contexts/gamification/domain/wallet/ledger-entry.js';
 import {
   Wallet,
   type AwardOutcome,
   type RewardClaim,
   type RewardRules,
-} from '../../src/gamification/domain/wallet/wallet.js';
+} from '../../src/contexts/gamification/domain/wallet/wallet.js';
 import { retryOnConflict } from '../../src/shared-kernel/retry-on-conflict.js';
 import type { FeedbackId, UserId } from '../../src/shared-kernel/ids.js';
 import { FakeClock } from './fake-clock.js';

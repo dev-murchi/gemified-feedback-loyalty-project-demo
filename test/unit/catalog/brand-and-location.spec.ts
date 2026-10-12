@@ -1,5 +1,5 @@
-import { Brand } from '../../../src/catalog/domain/brand/brand.js';
-import { GeoPoint } from '../../../src/catalog/domain/geo-point.js';
+import { Brand } from '../../../src/contexts/catalog/domain/brand/brand.js';
+import { GeoPoint } from '../../../src/contexts/catalog/domain/geo-point.js';
 import { BRAND_ID } from '../../support/catalog-builders.js';
 
 describe('Brand', () => {

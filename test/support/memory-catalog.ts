@@ -1,18 +1,18 @@
 import {
   MemoryBrandRepository,
   type BrandRow,
-} from '../../src/catalog/adapters/outbound/memory-brand.repository.js';
+} from '../../src/contexts/catalog/adapters/outbound/memory-brand.repository.js';
 import {
   MemoryBranchRepository,
   type BranchRow,
-} from '../../src/catalog/adapters/outbound/memory-branch.repository.js';
+} from '../../src/contexts/catalog/adapters/outbound/memory-branch.repository.js';
 import {
   MemoryLabelSetRepository,
   type LabelSetRow,
-} from '../../src/catalog/adapters/outbound/memory-label-set.repository.js';
-import type { BranchRepository } from '../../src/catalog/application/ports/branch-repository.js';
-import type { BrandRepository } from '../../src/catalog/application/ports/brand-repository.js';
-import type { LabelSetRepository } from '../../src/catalog/application/ports/label-set-repository.js';
+} from '../../src/contexts/catalog/adapters/outbound/memory-label-set.repository.js';
+import type { BranchRepository } from '../../src/contexts/catalog/application/ports/branch-repository.js';
+import type { BrandRepository } from '../../src/contexts/catalog/application/ports/brand-repository.js';
+import type { LabelSetRepository } from '../../src/contexts/catalog/application/ports/label-set-repository.js';
 import { InMemoryTable } from '../../src/shared-kernel/adapters/in-memory-table.js';
 import { InMemoryUnitOfWork } from '../../src/shared-kernel/adapters/in-memory-unit-of-work.js';
 import type { OutboxRecord } from '../../src/shared-kernel/outbox-record.js';

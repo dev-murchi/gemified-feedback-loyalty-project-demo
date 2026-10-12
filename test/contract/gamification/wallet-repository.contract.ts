@@ -1,5 +1,5 @@
-import { LedgerKey } from '../../../src/gamification/domain/wallet/ledger-entry.js';
-import { Wallet } from '../../../src/gamification/domain/wallet/wallet.js';
+import { LedgerKey } from '../../../src/contexts/gamification/domain/wallet/ledger-entry.js';
+import { Wallet } from '../../../src/contexts/gamification/domain/wallet/wallet.js';
 import { ConcurrencyConflictError } from '../../../src/shared-kernel/concurrency-conflict-error.js';
 import type { UserId } from '../../../src/shared-kernel/ids.js';
 import {

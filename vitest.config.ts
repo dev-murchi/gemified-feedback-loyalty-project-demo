@@ -10,8 +10,8 @@ export default defineConfig({
       provider: 'v8',
       include: [
         'src/shared-kernel/**/*.ts',
-        'src/*/domain/**/*.ts',
-        'src/*/application/**/*.ts',
+        'src/contexts/*/domain/**/*.ts',
+        'src/contexts/*/application/**/*.ts',
       ],
       thresholds: { lines: 80 },
       reporter: ['text', 'lcov'],

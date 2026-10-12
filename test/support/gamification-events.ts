@@ -1,10 +1,10 @@
 // Publishes the contract events in tests, the way Identity (S0-05) and Feedback (S0-07) will.
 
-import type { FeedbackValidated } from '../../src/feedback/public/feedback-validated.js';
-import { AwardReward } from '../../src/gamification/application/use-cases/award-reward.js';
-import { OpenWallet } from '../../src/gamification/application/use-cases/open-wallet.js';
-import type { WalletRepository } from '../../src/gamification/application/ports/wallet-repository.js';
-import type { UserRegistered } from '../../src/identity/public/user-registered.js';
+import type { FeedbackValidated } from '../../src/contexts/feedback/public/feedback-validated.js';
+import { AwardReward } from '../../src/contexts/gamification/application/use-cases/award-reward.js';
+import { OpenWallet } from '../../src/contexts/gamification/application/use-cases/open-wallet.js';
+import type { WalletRepository } from '../../src/contexts/gamification/application/ports/wallet-repository.js';
+import type { UserRegistered } from '../../src/contexts/identity/public/user-registered.js';
 import type { DomainEvent } from '../../src/shared-kernel/domain-event.js';
 import type { UserId } from '../../src/shared-kernel/ids.js';
 import { retryOnConflict } from '../../src/shared-kernel/retry-on-conflict.js';

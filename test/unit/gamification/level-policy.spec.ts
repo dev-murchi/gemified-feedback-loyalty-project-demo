@@ -1,4 +1,4 @@
-import { LevelPolicy } from '../../../src/gamification/domain/level-policy.js';
+import { LevelPolicy } from '../../../src/contexts/gamification/domain/level-policy.js';
 
 describe('LevelPolicy (FR-GAM-02)', () => {
   const levels = new LevelPolicy();

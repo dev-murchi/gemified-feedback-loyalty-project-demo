@@ -1,7 +1,7 @@
 import {
   LabelSet,
   type NewLabelSet,
-} from '../../../src/catalog/domain/label-set/label-set.js';
+} from '../../../src/contexts/catalog/domain/label-set/label-set.js';
 
 const valid: NewLabelSet = {
   sector: 'coffee',

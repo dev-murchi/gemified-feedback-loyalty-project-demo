@@ -1,6 +1,6 @@
-import type { BranchRepository } from '../../src/catalog/application/ports/branch-repository.js';
-import type { Branch } from '../../src/catalog/domain/branch/branch.js';
-import type { QrToken } from '../../src/catalog/domain/branch/qr-token.js';
+import type { BranchRepository } from '../../src/contexts/catalog/application/ports/branch-repository.js';
+import type { Branch } from '../../src/contexts/catalog/domain/branch/branch.js';
+import type { QrToken } from '../../src/contexts/catalog/domain/branch/qr-token.js';
 import { ConcurrencyConflictError } from '../../src/shared-kernel/concurrency-conflict-error.js';
 import type { BranchId } from '../../src/shared-kernel/ids.js';
 

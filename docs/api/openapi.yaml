@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Geri Bildirim ve Sadakat Motoru API
-  version: 0.2.1-demo
+  version: 0.2.2-demo
   description: |
     Demo (Sprint 0) kapsamındaki uç noktaların sözleşmesi. Bu dosya, backend ile Flutter
     ekibi arasındaki anlaşmanın kaynağıdır (SDD ADR-006); uygulamanın ürettiği OpenAPI
@@ -893,13 +893,26 @@ components:
       additionalProperties: false
       properties:
         platform: { const: ios }
-        nonce: { type: string }
+        nonce:
+          type: string
+          description: >-
+            `/v1/auth/challenge` yanıtındaki nonce, olduğu gibi (base64url, 43 karakter).
+            İmzalarda nonce'ın UTF-8 baytları kullanılır.
         keyId:
           type: string
-          description: App Attest anahtar kimliği (base64)
+          description: >-
+            App Attest anahtar kimliği (standart base64). **Geliştirme modu:** açık anahtarın DER
+            SPKI baytlarının SHA-256 özeti, standart base64.
         attestationObject:
           type: string
-          description: App Attest attestation nesnesi (base64); clientDataHash = SHA-256(nonce)
+          description: >-
+            App Attest attestation nesnesi (standart base64); clientDataHash = SHA-256(nonce).
+            **Geliştirme modu** (yalnızca `DevAttestationVerifier` anlar; üretimde kapalıdır): UTF-8
+            JSON'un standart base64'ü:
+            `{"format":"dev","publicKey":"<P-256 açık anahtar, DER SPKI, standart base64>","signature":"<imza, ASN.1 DER, standart base64>","integrity":"pass"|"fail"}`.
+            İmza JSON metni üzerinde atılmaz. ES256 imzalayıcıya verilen mesaj, SHA-256(nonce'ın UTF-8 baytları) değerinin 32 baytıdır; imzalayıcı bunu her zamanki gibi bir kez daha hash'ler. İmzalar ASN.1 DER biçimindedir. Ham r‖s (64 bayt; WebCrypto'nun ve bazı Dart kütüphanelerinin varsayılanı) reddedilir; DER'e çevrilmelidir.
+            `format` zorunludur ve `dev` olmalıdır; başka değer reddedilir. `integrity: fail`
+            düşük güven modunu dener.
 
     RegisterRequestAndroid:
       type: object
@@ -907,16 +920,29 @@ components:
       additionalProperties: false
       properties:
         platform: { const: android }
-        nonce: { type: string }
+        nonce:
+          type: string
+          description: >-
+            `/v1/auth/challenge` yanıtındaki nonce, olduğu gibi (base64url, 43 karakter).
+            İmzalarda nonce'ın UTF-8 baytları kullanılır.
         certificateChain:
           type: array
-          description: Key Attestation sertifika zinciri, yaprak sertifika önce (her biri base64 DER); attestationChallenge = nonce
+          description: >-
+            Key Attestation sertifika zinciri, yaprak sertifika önce (her biri standart base64
+            DER); attestationChallenge = nonce. **Geliştirme modu:** `[0]` = P-256 açık anahtarın
+            DER SPKI baytları, standart base64; `[1]` = sabit değer `ZGV2` (base64("dev")).
+            `DevAttestationVerifier` tam olarak bu iki öğeyi bekler.
           minItems: 2
           maxItems: 10
           items: { type: string }
         integrityToken:
           type: string
-          description: Play Integrity standart istek token'ı; requestHash = SHA-256(nonce + açık anahtar)
+          description: >-
+            Play Integrity standart istek token'ı; requestHash = SHA-256(nonce + açık anahtar).
+            **Geliştirme modu:** UTF-8 JSON'un standart base64'ü:
+            `{"format":"dev","signature":"<imza, ASN.1 DER, standart base64>","integrity":"pass"|"fail"}`.
+            ES256 imzalayıcıya verilen mesaj, SHA-256(nonce'ın UTF-8 baytları ‖ açık anahtarın DER SPKI baytları) değerinin 32 baytıdır; imzalayıcı bunu her zamanki gibi bir kez daha hash'ler. İmzalar ASN.1 DER biçimindedir. Ham r‖s (64 bayt; WebCrypto'nun ve bazı Dart kütüphanelerinin varsayılanı) reddedilir; DER'e çevrilmelidir.
+            `format` zorunludur ve `dev` olmalıdır; başka değer reddedilir.
 
     SessionRequest:
       type: object
@@ -925,7 +951,10 @@ components:
         platform: { type: string, enum: [ios, android] }
         keyId:
           type: string
-          description: 'iOS: App Attest anahtar kimliği; Android: açık anahtarın SHA-256 özeti (base64url)'
+          description: >-
+            iOS: App Attest anahtar kimliği (standart base64; geliştirme modunda kayıttaki `keyId`
+            ile aynı). Android: açık anahtarın DER SPKI baytlarının SHA-256 özeti, base64url
+            (kayıttaki parmak iziyle aynı).
         nonce: { type: string }
         assertion:
           type: string

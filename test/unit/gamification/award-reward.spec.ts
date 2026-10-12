@@ -1,4 +1,4 @@
-import { LedgerKey } from '../../../src/gamification/domain/wallet/ledger-entry.js';
+import { LedgerKey } from '../../../src/contexts/gamification/domain/wallet/ledger-entry.js';
 import type { UserId } from '../../../src/shared-kernel/ids.js';
 import {
   aClaim,
