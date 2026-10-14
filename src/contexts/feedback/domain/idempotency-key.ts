@@ -9,6 +9,9 @@ export interface InvalidIdempotencyKey extends DomainError<'VALIDATION_ERROR'> {
   readonly field: 'Idempotency-Key';
 }
 
+/** The key was used before with a different body (FR-AI-10); API code IDEMPOTENCY_KEY_MISMATCH (422). */
+export type IdempotencyKeyMismatch = DomainError<'IDEMPOTENCY_KEY_MISMATCH'>;
+
 /** `Idempotency-Key` in docs/api/openapi.yaml is `format: uuid`. */
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 

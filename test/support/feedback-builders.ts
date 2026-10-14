@@ -56,6 +56,7 @@ export const IDEMPOTENCY_KEY =
   '11111111-1111-4111-8111-111111111111' as IdempotencyKey;
 export const OTHER_IDEMPOTENCY_KEY =
   '22222222-2222-4222-8222-222222222222' as IdempotencyKey;
+export const QR_CODE_ID = 'd0000000-0000-4000-8000-0000000000f1';
 export const FINGERPRINT = 'a'.repeat(64) as RequestFingerprint;
 
 /** Not real ciphertext: the aggregate only carries it. */
@@ -72,6 +73,7 @@ export const aNewFeedback = (
   id: feedbackId(1),
   userId: FEEDBACK_USER_ID,
   branchId: FEEDBACK_BRANCH_ID,
+  qrCodeId: QR_CODE_ID,
   sector: 'fuel',
   idempotencyKey: IDEMPOTENCY_KEY,
   requestFingerprint: FINGERPRINT,

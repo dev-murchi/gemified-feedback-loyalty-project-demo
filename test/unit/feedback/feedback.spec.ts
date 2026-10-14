@@ -252,6 +252,7 @@ describe('Feedback', () => {
           id: source.id,
           userId: source.userId,
           branchId: source.branchId,
+          qrCodeId: source.qrCodeId,
           idempotencyKey: source.idempotencyKey,
           requestFingerprint: source.requestFingerprint,
           status: source.status,

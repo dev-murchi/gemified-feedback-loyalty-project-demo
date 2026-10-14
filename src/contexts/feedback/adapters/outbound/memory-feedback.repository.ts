@@ -22,6 +22,7 @@ export interface FeedbackRow {
   readonly id: string;
   readonly userId: string;
   readonly branchId: string;
+  readonly qrCodeId: string;
   readonly idempotencyKey: string;
   readonly requestFingerprint: string;
   readonly status: FeedbackStatus;
@@ -45,6 +46,7 @@ const toFeedback = (row: FeedbackRow): Feedback =>
       id: row.id as FeedbackId,
       userId: row.userId as UserId,
       branchId: row.branchId as BranchId,
+      qrCodeId: row.qrCodeId,
       idempotencyKey: row.idempotencyKey as IdempotencyKey,
       requestFingerprint: row.requestFingerprint as RequestFingerprint,
       status: row.status,
@@ -62,6 +64,7 @@ const toRow = (feedback: Feedback, version: number): FeedbackRow => ({
   id: feedback.id,
   userId: feedback.userId,
   branchId: feedback.branchId,
+  qrCodeId: feedback.qrCodeId,
   idempotencyKey: feedback.idempotencyKey,
   requestFingerprint: feedback.requestFingerprint,
   status: feedback.status,

@@ -21,6 +21,8 @@ export interface FeedbackState {
   readonly id: FeedbackId;
   readonly userId: UserId;
   readonly branchId: BranchId;
+  /** The scanned QR code (Catalog's id; FEEDBACKS.qr_code_id). */
+  readonly qrCodeId: string;
   readonly idempotencyKey: IdempotencyKey;
   readonly requestFingerprint: RequestFingerprint;
   readonly status: FeedbackStatus;
@@ -40,6 +42,7 @@ export interface NewFeedback {
   readonly id: FeedbackId;
   readonly userId: UserId;
   readonly branchId: BranchId;
+  readonly qrCodeId: string;
   /** The branch's sector; Analysis picks the topic list from it. */
   readonly sector: string;
   readonly idempotencyKey: IdempotencyKey;
@@ -101,6 +104,7 @@ export class Feedback extends AggregateRoot<FeedbackEvent> {
         id: input.id,
         userId: input.userId,
         branchId: input.branchId,
+        qrCodeId: input.qrCodeId,
         idempotencyKey: input.idempotencyKey,
         requestFingerprint: input.requestFingerprint,
         status: 'analyzing',
@@ -143,6 +147,10 @@ export class Feedback extends AggregateRoot<FeedbackEvent> {
 
   get branchId(): BranchId {
     return this.#state.branchId;
+  }
+
+  get qrCodeId(): string {
+    return this.#state.qrCodeId;
   }
 
   get idempotencyKey(): IdempotencyKey {

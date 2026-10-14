@@ -19,6 +19,7 @@ const stateOf = (feedback: Feedback | undefined) =>
     id: feedback.id,
     userId: feedback.userId,
     branchId: feedback.branchId,
+    qrCodeId: feedback.qrCodeId,
     idempotencyKey: feedback.idempotencyKey,
     requestFingerprint: feedback.requestFingerprint,
     status: feedback.status,
