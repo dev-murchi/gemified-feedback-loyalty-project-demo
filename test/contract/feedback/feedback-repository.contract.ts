@@ -13,6 +13,10 @@ import {
 import type { FeedbackHarness } from '../../support/memory-feedback.js';
 import { versionedRepositoryContract } from '../support/versioned-repository.contract.js';
 
+/** A distinct Idempotency-Key per feedback, so several feedbacks of one user can be stored. */
+const KEY = (n: number) =>
+  `11111111-1111-4111-8111-${String(n).padStart(12, '0')}` as typeof IDEMPOTENCY_KEY;
+
 /** Everything a stored feedback must give back, compared as plain data. */
 const stateOf = (feedback: Feedback | undefined) =>
   feedback && {
@@ -187,6 +191,50 @@ export function feedbackRepositoryContract(
       expect((await harness.feedbacks.find(feedbackId(1)))?.status).toBe(
         'analyzing',
       );
+    });
+
+    it('lists feedbacks still analyzing submitted before a time, oldest first, up to a limit (FR-AI-09)', async () => {
+      // Given three analyzing feedbacks at T0, 1h and 2h, and a closed one at 0:30
+      await save(
+        aFeedback({
+          id: feedbackId(3),
+          submittedAt: after(2),
+          idempotencyKey: KEY(3),
+        }),
+      );
+      await save(
+        aFeedback({
+          id: feedbackId(1),
+          submittedAt: T0,
+          idempotencyKey: KEY(1),
+        }),
+      );
+      await save(
+        aFeedback({
+          id: feedbackId(2),
+          submittedAt: after(1),
+          idempotencyKey: KEY(2),
+        }),
+      );
+      const closed = aFeedback({
+        id: feedbackId(4),
+        submittedAt: after(0, 30),
+        idempotencyKey: KEY(4),
+      });
+      closed.applyAnalysis({
+        verdict: 'spam',
+        maskedText: 'x',
+        analyzedAt: after(0, 31),
+      });
+      await save(closed);
+
+      // Then only the analyzing ones before 2h are listed, oldest first, and the limit holds
+      expect(
+        await harness.feedbacks.findAnalyzingSubmittedBefore(after(2), 10),
+      ).toEqual([feedbackId(1), feedbackId(2)]);
+      expect(
+        await harness.feedbacks.findAnalyzingSubmittedBefore(after(3), 1),
+      ).toEqual([feedbackId(1)]);
     });
   });
 }

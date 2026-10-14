@@ -7,6 +7,7 @@ import {
   type RewardCooldownRow,
 } from '../../src/contexts/feedback/adapters/outbound/memory-reward-cooldown.repository.js';
 import type { FeedbackRepository } from '../../src/contexts/feedback/application/ports/feedback-repository.js';
+import type { FeedbackValidated } from '../../src/contexts/feedback/public/feedback-validated.js';
 import type { RewardCooldownRepository } from '../../src/contexts/feedback/application/ports/reward-cooldown-repository.js';
 import {
   DEFAULT_REWARD_LIMITS,
@@ -25,6 +26,8 @@ export interface FeedbackHarness {
   readonly uow: UnitOfWork;
   readonly cooldowns: RewardCooldownRepository;
   readonly feedbacks: FeedbackRepository;
+  /** FeedbackValidated events delivered by committed and rolled-back units of work alike. */
+  readonly validated: FeedbackValidated[];
   /** The events waiting for the queue, oldest first. */
   outbox(): Promise<readonly OutboxRecord[]>;
   dispose(): Promise<void>;
@@ -37,10 +40,17 @@ export function memoryFeedbackHarness(
   const cooldowns = new InMemoryTable<string, RewardCooldownRow>();
   const feedbacks = new InMemoryTable<string, FeedbackRow>();
   const outbox = new InMemoryTable<string, OutboxRecord>();
+  const validated: FeedbackValidated[] = [];
+  const recordValidated = {
+    handle: (event: FeedbackValidated) => {
+      validated.push(event);
+      return Promise.resolve();
+    },
+  };
   const uow = new InMemoryUnitOfWork({
     routes: fixedRoutes({
       FeedbackSubmitted: { outbox: true },
-      FeedbackValidated: { sync: [] },
+      FeedbackValidated: { sync: [recordValidated] },
     }),
     tables: [cooldowns, feedbacks],
     outbox,
@@ -55,6 +65,7 @@ export function memoryFeedbackHarness(
       limits,
     }),
     feedbacks: new MemoryFeedbackRepository({ table: feedbacks, events: uow }),
+    validated,
     outbox: () => Promise.resolve(outbox.values()),
     dispose: () => Promise.resolve(),
   });

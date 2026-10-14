@@ -2,6 +2,10 @@
 // as plain objects (fakes, not mocks: docs/07 §9).
 
 import type { RewardCooldownRepository } from '../../src/contexts/feedback/application/ports/reward-cooldown-repository.js';
+import type {
+  UnanalyzedFindings,
+  UnanalyzedReport,
+} from '../../src/contexts/analysis/public/unanalyzed-report.js';
 import type { BranchDirectory } from '../../src/contexts/catalog/public/branch-directory.js';
 import type {
   QrResolver,
@@ -105,26 +109,52 @@ export function fakeRewards(): FakeRewards {
 }
 
 /**
- * Wraps a cooldown repository: the first `conflicts` saves throw ConcurrencyConflictError, as if
- * another request had saved in between; `failure` makes every save throw that error instead.
+ * Wraps a cooldown repository: the next `conflictsLeft` saves throw ConcurrencyConflictError, as
+ * if another request had saved in between; `failure` makes every save throw that error instead.
+ * Both can be changed during a test.
  */
+export interface ScriptedCooldowns extends RewardCooldownRepository {
+  loads: number;
+  conflictsLeft: number;
+  failure: Error | undefined;
+}
+
 export function scriptedCooldowns(
   inner: RewardCooldownRepository,
-  script: { conflicts?: number; failure?: Error },
-): RewardCooldownRepository & { loads: number } {
-  let conflictsLeft = script.conflicts ?? 0;
-  const wrapper = {
+  script: { conflicts?: number; failure?: Error } = {},
+): ScriptedCooldowns {
+  const wrapper: ScriptedCooldowns = {
     loads: 0,
-    find: (...args: Parameters<RewardCooldownRepository['find']>) => {
+    conflictsLeft: script.conflicts ?? 0,
+    failure: script.failure,
+    find: (...args) => {
       wrapper.loads += 1;
       return inner.find(...args);
     },
-    save: (...args: Parameters<RewardCooldownRepository['save']>) => {
-      if (script.failure !== undefined) return Promise.reject(script.failure);
-      if (conflictsLeft === 0) return inner.save(...args);
-      conflictsLeft -= 1;
+    save: (...args) => {
+      if (wrapper.failure !== undefined) return Promise.reject(wrapper.failure);
+      if (wrapper.conflictsLeft === 0) return inner.save(...args);
+      wrapper.conflictsLeft -= 1;
       return Promise.reject(new ConcurrencyConflictError(args[0].userId));
     },
   };
   return wrapper;
+}
+
+/** An UnanalyzedReport with set findings that records which feedbacks it was asked about. */
+export interface FakeReport extends UnanalyzedReport {
+  findings: UnanalyzedFindings;
+  readonly asked: string[];
+}
+
+export function fakeReport(): FakeReport {
+  const fake: FakeReport = {
+    findings: { maskedText: null, rewardAllowed: true },
+    asked: [],
+    findingsFor: (feedbackId) => {
+      fake.asked.push(feedbackId);
+      return Promise.resolve(fake.findings);
+    },
+  };
+  return fake;
 }

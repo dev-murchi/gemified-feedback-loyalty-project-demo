@@ -98,6 +98,23 @@ export class MemoryFeedbackRepository implements FeedbackRepository {
     return Promise.resolve(row === undefined ? undefined : toFeedback(row));
   }
 
+  findAnalyzingSubmittedBefore(
+    submittedBefore: Date,
+    limit: number,
+  ): Promise<readonly FeedbackId[]> {
+    const ids = this.deps.table
+      .values()
+      .filter(
+        (row) =>
+          row.status === 'analyzing' &&
+          row.submittedAt.getTime() < submittedBefore.getTime(),
+      )
+      .sort((a, b) => a.submittedAt.getTime() - b.submittedAt.getTime())
+      .slice(0, limit)
+      .map((row) => row.id as FeedbackId);
+    return Promise.resolve(ids);
+  }
+
   /** Version first, then the key constraint, then the write (docs/07 §6). */
   save(feedback: Feedback): Promise<void> {
     return asPromise(() => {

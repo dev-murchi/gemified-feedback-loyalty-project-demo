@@ -10,6 +10,14 @@ export interface FeedbackRepository {
     key: IdempotencyKey,
   ): Promise<Feedback | undefined>;
   /**
+   * Ids of feedbacks still analyzing that were submitted before `submittedBefore`, oldest first,
+   * at most `limit` (the 24-hour sweeper, FR-AI-09).
+   */
+  findAnalyzingSubmittedBefore(
+    submittedBefore: Date,
+    limit: number,
+  ): Promise<readonly FeedbackId[]>;
+  /**
    * Optimistic lock (ADR-019, docs/07 §4): throws ConcurrencyConflictError on a stale version. The
    * unique pair (user, Idempotency-Key) is the last line of defence: a second feedback with a
    * taken pair is an infrastructure error, not a conflict (docs/07 §6). Inside a unit of work.

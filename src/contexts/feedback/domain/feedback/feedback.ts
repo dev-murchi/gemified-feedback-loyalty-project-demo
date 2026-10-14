@@ -17,6 +17,9 @@ import {
 
 export type FeedbackEvent = FeedbackSubmitted | FeedbackValidated;
 
+/** A feedback still analyzing this long after submission is closed as unanalyzed (FR-AI-09). */
+export const ANALYSIS_DEADLINE_MS = 24 * 60 * 60 * 1000;
+
 export interface FeedbackState {
   readonly id: FeedbackId;
   readonly userId: UserId;
@@ -187,6 +190,14 @@ export class Feedback extends AggregateRoot<FeedbackEvent> {
 
   get rawText(): StoredRawText | null {
     return copyRawText(this.#state.rawText);
+  }
+
+  /** Still analyzing 24 hours or more after submission: due to be closed (FR-AI-09). */
+  isOverdueAt(now: Date): boolean {
+    return (
+      this.#state.status === 'analyzing' &&
+      now.getTime() - this.#state.submittedAt.getTime() >= ANALYSIS_DEADLINE_MS
+    );
   }
 
   /**

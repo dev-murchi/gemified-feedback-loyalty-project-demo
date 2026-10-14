@@ -1,7 +1,10 @@
 import type { SubmitFeedbackResult } from '../../../src/contexts/feedback/application/use-cases/submit-feedback.js';
 import { ConcurrencyConflictError } from '../../../src/shared-kernel/concurrency-conflict-error.js';
 import type { Result } from '../../../src/shared-kernel/result.js';
-import { scriptedCooldowns } from '../../support/feedback-fakes.js';
+import {
+  scriptedCooldowns,
+  type ScriptedCooldowns,
+} from '../../support/feedback-fakes.js';
 import {
   aSubmission,
   submissionFixture,
@@ -47,7 +50,7 @@ describe('SubmitFeedback', () => {
 
     it('reloads and decides again after a conflict, so the retry succeeds', async () => {
       // Given a cooldown repository whose first save conflicts
-      let wrapped: ReturnType<typeof scriptedCooldowns> | undefined;
+      let wrapped: ScriptedCooldowns | undefined;
       fixture = await submissionFixture({
         wrapCooldowns: (inner) =>
           (wrapped = scriptedCooldowns(inner, { conflicts: 1 })),

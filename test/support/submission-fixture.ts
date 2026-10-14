@@ -2,6 +2,8 @@ import { createSecretKey, randomBytes } from 'node:crypto';
 import { LocalRawTextCipher } from '../../src/contexts/feedback/adapters/outbound/local-raw-text.cipher.js';
 import { NodeHasher } from '../../src/contexts/feedback/adapters/outbound/node-hasher.js';
 import type { RewardCooldownRepository } from '../../src/contexts/feedback/application/ports/reward-cooldown-repository.js';
+import { ApplyAnalysisResult } from '../../src/contexts/feedback/application/use-cases/apply-analysis-result.js';
+import { FinalizeUnanalyzedFeedback } from '../../src/contexts/feedback/application/use-cases/finalize-unanalyzed-feedback.js';
 import { GetFeedbackStatus } from '../../src/contexts/feedback/application/use-cases/get-feedback-status.js';
 import {
   SubmitFeedback,
@@ -15,10 +17,12 @@ import {
   fakeBranchDirectory,
   fakeProofs,
   fakeQrResolver,
+  fakeReport,
   fakeRewards,
   QR_TOKEN,
   type FakeProofs,
   type FakeQrResolver,
+  type FakeReport,
   type FakeRewards,
 } from './feedback-fakes.js';
 import {
@@ -62,6 +66,9 @@ export interface SubmissionFixture {
   readonly cipher: LocalRawTextCipher;
   readonly submit: SubmitFeedback;
   readonly status: GetFeedbackStatus;
+  readonly report: FakeReport;
+  readonly apply: ApplyAnalysisResult;
+  readonly finalize: FinalizeUnanalyzedFeedback;
 }
 
 /** SubmitFeedback and GetFeedbackStatus on in-memory adapters, a real cipher, and fakes for others. */
@@ -73,6 +80,8 @@ export async function submissionFixture(
   } = {},
 ): Promise<SubmissionFixture> {
   const harness = await memoryFeedbackHarness();
+  const cooldowns =
+    options.wrapCooldowns?.(harness.cooldowns) ?? harness.cooldowns;
   const clock = new FakeClock(T0);
   const qrCodes = fakeQrResolver();
   const proofs = fakeProofs();
@@ -83,7 +92,7 @@ export async function submissionFixture(
   });
   const submit = new SubmitFeedback({
     feedbacks: harness.feedbacks,
-    cooldowns: options.wrapCooldowns?.(harness.cooldowns) ?? harness.cooldowns,
+    cooldowns,
     limits: DEFAULT_REWARD_LIMITS,
     qrCodes,
     proofs,
@@ -98,5 +107,24 @@ export async function submissionFixture(
     branches: fakeBranchDirectory(),
     rewards,
   });
-  return { harness, clock, qrCodes, proofs, rewards, cipher, submit, status };
+  const report = fakeReport();
+  const stores = { feedbacks: harness.feedbacks, cooldowns };
+  return {
+    harness,
+    clock,
+    qrCodes,
+    proofs,
+    rewards,
+    cipher,
+    submit,
+    status,
+    report,
+    apply: new ApplyAnalysisResult(stores),
+    finalize: new FinalizeUnanalyzedFeedback({
+      ...stores,
+      report,
+      uow: harness.uow,
+      clock,
+    }),
+  };
 }

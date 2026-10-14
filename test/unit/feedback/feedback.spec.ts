@@ -240,6 +240,22 @@ describe('Feedback', () => {
     });
   });
 
+  describe('isOverdueAt (FR-AI-09)', () => {
+    it('is due exactly 24 hours after submission while still analyzing', () => {
+      const feedback = aFeedback();
+
+      expect(feedback.isOverdueAt(after(23, 59))).toBe(false);
+      expect(feedback.isOverdueAt(after(24))).toBe(true);
+    });
+
+    it('is never due once closed', () => {
+      const feedback = aFeedback();
+      feedback.applyAnalysis(valid());
+
+      expect(feedback.isOverdueAt(after(48))).toBe(false);
+    });
+  });
+
   describe('reconstitute', () => {
     it('restores a stored feedback with its version and records no event', () => {
       // Given the state of a stored, closed feedback
