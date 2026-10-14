@@ -1,7 +1,12 @@
 import {
+  MemoryFeedbackRepository,
+  type FeedbackRow,
+} from '../../src/contexts/feedback/adapters/outbound/memory-feedback.repository.js';
+import {
   MemoryRewardCooldownRepository,
   type RewardCooldownRow,
 } from '../../src/contexts/feedback/adapters/outbound/memory-reward-cooldown.repository.js';
+import type { FeedbackRepository } from '../../src/contexts/feedback/application/ports/feedback-repository.js';
 import type { RewardCooldownRepository } from '../../src/contexts/feedback/application/ports/reward-cooldown-repository.js';
 import {
   DEFAULT_REWARD_LIMITS,
@@ -19,6 +24,9 @@ import { SequentialIdGenerator } from './sequential-id-generator.js';
 export interface FeedbackHarness {
   readonly uow: UnitOfWork;
   readonly cooldowns: RewardCooldownRepository;
+  readonly feedbacks: FeedbackRepository;
+  /** The events waiting for the queue, oldest first. */
+  outbox(): Promise<readonly OutboxRecord[]>;
   dispose(): Promise<void>;
 }
 
@@ -27,10 +35,15 @@ export function memoryFeedbackHarness(
   limits: RewardLimits = DEFAULT_REWARD_LIMITS,
 ): Promise<FeedbackHarness> {
   const cooldowns = new InMemoryTable<string, RewardCooldownRow>();
+  const feedbacks = new InMemoryTable<string, FeedbackRow>();
+  const outbox = new InMemoryTable<string, OutboxRecord>();
   const uow = new InMemoryUnitOfWork({
-    routes: fixedRoutes({}),
-    tables: [cooldowns],
-    outbox: new InMemoryTable<string, OutboxRecord>(),
+    routes: fixedRoutes({
+      FeedbackSubmitted: { outbox: true },
+      FeedbackValidated: { sync: [] },
+    }),
+    tables: [cooldowns, feedbacks],
+    outbox,
     clock: new FakeClock(),
     ids: new SequentialIdGenerator(),
   });
@@ -41,6 +54,8 @@ export function memoryFeedbackHarness(
       events: uow,
       limits,
     }),
+    feedbacks: new MemoryFeedbackRepository({ table: feedbacks, events: uow }),
+    outbox: () => Promise.resolve(outbox.values()),
     dispose: () => Promise.resolve(),
   });
 }

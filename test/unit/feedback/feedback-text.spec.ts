@@ -54,4 +54,33 @@ describe('FeedbackText', () => {
     expect(errorOf('x'.repeat(5000))?.code).toBe('TEXT_TOO_LONG');
     expect(errorOf('')?.code).toBe('TEXT_TOO_SHORT');
   });
+
+  describe('control characters (SDD 7.5, SRS CR-007)', () => {
+    const textOf = (raw: string) => {
+      const result = FeedbackText.create(raw);
+      return result.ok ? result.value : undefined;
+    };
+
+    it('removes control characters but keeps tab, line feed and carriage return', () => {
+      // Given a comment with a NUL, an escape, a C1 control and a tab, a newline and a CR
+      const raw = `abc\u0000\u001bdef\u0085ghij\tklm\nnop\rqrs`;
+
+      // Then only the three allowed ones remain
+      expect(textOf(raw)).toBe('abcdefghij\tklm\nnop\rqrs');
+    });
+
+    it('counts the length after removing them, so hidden characters cannot pad a short comment', () => {
+      // Given 19 visible characters and 10 control characters
+      const raw = `${'a'.repeat(19)}${'\u0000'.repeat(10)}`;
+
+      // Then it is too short (19), not accepted as 29
+      expect(errorOf(raw)).toEqual({ code: 'TEXT_TOO_SHORT', length: 19 });
+    });
+
+    it('does not remove emoji, accents or other letters', () => {
+      const raw = 'Çok güzel bir şubeydi 😀 teşekkürler';
+
+      expect(textOf(raw)).toBe(raw);
+    });
+  });
 });
