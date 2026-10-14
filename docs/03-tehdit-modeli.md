@@ -8,11 +8,12 @@ Bu doküman, sistemin güvenlik kararlarının hangi tehditlere karşı alındı
 
 | Alan | Değer |
 | --- | --- |
-| Sürüm | 1.0 |
+| Sürüm | 1.1 |
 | Kapsam | Backend, mobil istemciyle ve marka sistemleriyle olan arayüzleri, dış servis bağımlılıkları |
 | Kapsam dışı | Flutter uygulamasının iç güvenliği (mobil ekibin sorumluluğu), AWS'nin kendi altyapı güvenliği |
 | Dayandığı dokümanlar | SRS v1.6, SDD v1.3 |
 | Gözden geçirme | Her mimari değişiklikte ve en az üç ayda bir |
+| Değişiklik (1.1) | T-T6: 24 saat kuralının şemaya aykırı LLM yanıtıyla kötüye kullanılması (SRS CR-007) |
 
 ## 2. Korunan Varlıklar
 
@@ -87,6 +88,7 @@ Risk = olasılık × etki (Y = yüksek, O = orta, D = düşük); önlemlerden **
 | T-T3 | Ledger kayıtlarının değiştirilmesi veya silinmesi | Uygulama rolüne UPDATE/DELETE yetkisi yok; düzeltme yalnızca ters kayıtla | D | FR-GAM-03 |
 | T-T4 | Şubedeki QR'ın üstüne sahte QR yapıştırılması (oltalama) | QR yalnızca platform alan adına bağlantı (alan adı: SRS S-21); uygulama başka alan adını reddeder; universal/app links; şube kontrol yönergesi | O: sistem kamerasıyla okutan kullanıcı sahte siteye gidebilir; kullanıcı bilinçlendirmesi gerekir | TZ-16 |
 | T-T5 | QR fotoğrafının yayılmasıyla şube verisinin kirletilmesi | Kullanıcı başına şube kuralları; anomali tespiti; QR iptali | O: tespit edilene kadar veri kirlenir; kalıcı çözüm müşteri kararı | CR-001, TZ-2 |
+| T-T6 | LLM yanıtını sürekli şemaya aykırı hale getiren bir yorumla (ör. prompt injection) analizi 24 saat boyunca engelleyip otomatik ödül alınması | Otomatik ödül yalnızca sağlayıcıya erişilemediğinde; son hata şemaya aykırı yanıtsa yorum ödülsüz kapatılır; deneme sınırı ve uzunluk sınırı | D | FR-AI-09, SDD 8.2 |
 
 ### 4.3 İnkar (R)
 

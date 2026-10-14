@@ -92,9 +92,9 @@ Kimlik, istemcinin beyan ettiği bir cihaz kimliğine değil, cihazın güvenli 
 | FR-QR-04 | Aynı kullanıcıdan aynı şube için gelen eşzamanlı isteklerde yalnızca birinin kabul edilmesi veritabanı seviyesinde garanti edilmelidir; farklı kullanıcılar aynı sabit QR'ı serbestçe kullanabilir. | M |
 | FR-QR-05 | Reddedilen her deneme, sebebiyle birlikte loglanmalıdır. | S |
 | FR-QR-06 | Kimliği doğrulanmış isteklerde hız sınırları doğrulanmış cihaz kimliğine bağlı uygulanmalıdır. IP adresi, mobil operatörlerin binlerce kullanıcıyı aynı IP'den çıkarması (CGNAT) nedeniyle bu isteklerde tek başına sınır anahtarı olarak kullanılmamalıdır. Kimlik doğrulama öncesi uç noktalarda (challenge, kayıt, oturum) kimlik bulunmadığından yalnızca geniş eşikli IP sınırları uygulanır (CR-005). | M |
-| FR-QR-07 | Bir kullanıcı aynı şubede, bir önceki ödüllü yorumunun gönderim zamanından itibaren 24 saat geçmeden yeniden ödül kazanamaz. Ödül hakkı yalnızca geçerli sayılan (veya FR-AI-09 gereği geçerli kabul edilen) yorumla tüketilir. Bir yorum incelenirken aynı şubeye yeni yorum gönderilemez. Süre yapılandırılabilir olmalıdır. | M |
+| FR-QR-07 | Bir kullanıcı aynı şubede, bir önceki ödüllü yorumunun gönderim zamanından itibaren 24 saat geçmeden yeniden ödül kazanamaz. Ödül hakkı yalnızca fiilen ödül verilen yorumla tüketilir; geçerli sayıldığı halde ödül almayan yorum (düşük güven, geçersiz platform kanıtı, FR-AI-09 gereği ödülsüz kapatılan yorum) ödül hakkını tüketmez *(Ekip önerisi; müşteri doğrulaması bekliyor, CR-007)*. Bir yorum incelenirken aynı şubeye yeni yorum gönderilemez. Süre yapılandırılabilir olmalıdır. | M |
 | FR-QR-08 | QR doğrulama mantığı, sonraki fazdaki imzalı, süreli ve tek kullanımlık dinamik QR'ı destekleyecek şekilde genişletilebilir olmalıdır. | S |
-| FR-QR-09 | Bir kullanıcı aynı şubede herhangi bir 24 saatlik aralıkta en fazla 3 yorum gönderebilir; spam sayılan yorum ödül hakkını tüketmez ama deneme hakkını tüketir. Deneme sayısı yapılandırılabilir olmalıdır. | M |
+| FR-QR-09 | Bir kullanıcı aynı şubede herhangi bir 24 saatlik aralıkta en fazla 3 yorum gönderebilir; spam sayılan yorum ödül hakkını tüketmez ama deneme hakkını tüketir. Deneme sayısı yapılandırılabilir olmalıdır. Deneme, kabul edilen her yorum gönderimidir (düşük güvenli olanlar dahil); reddedilen istek (geçersiz QR veya metin, bekleme süresi, deneme sınırı) deneme sayılmaz. | M |
 | FR-QR-10 | Ödül kazandırabilecek yorum gönderimi, istek gövdesinin özetine bağlanmış bir platform kanıtı (iOS: App Attest assertion; Android: Play Integrity token) taşımalıdır. Kanıtı eksik veya geçersiz istek düşük güven modunda işlenir. | M |
 
 ### 5.3 Yapay Zeka (NLP) Köprüsü
@@ -109,10 +109,10 @@ Kimlik, istemcinin beyan ettiği bir cihaz kimliğine değil, cihazın güvenli 
 | FR-AI-06 | LLM sağlayıcısı (OpenAI, Gemini vb.), iş mantığı değişmeden değiştirilebilir olmalıdır. | M |
 | FR-AI-07 | Yorum metni LLM'e gönderilmeden önce telefon, e-posta, plaka ve T.C. kimlik numarası gibi kişisel veriler maskelenmelidir. İsimlerin desen tabanlı maskelenmesinin sınırlı olduğu bilinen bir kısıttır (SDD TZ-8). | M |
 | FR-AI-08 | LLM, metnin anlamlı bir geri bildirim olup olmadığını (geçerli / spam) da döndürmelidir. | M |
-| FR-AI-09 | Teknik bir aksaklık nedeniyle 24 saat içinde analiz edilemeyen yorum "analiz edilemedi" olarak kapatılır ve kullanıcının o şubedeki bekleyen yorum kilidi açılır; yorum B2B yanıtlarında "analiz edilemedi" durumuyla yer alır. Yorum, gönderim anında ödüle uygunsa (normal güven ve geçerli platform kanıtı, FR-QR-10) ve bütçe koruması (FR-AI-12) devrede değilse ödüllendirilir; aksi halde ödülsüz kapatılır. AI dışı ön kontrolden geçemeyen yorum spam sayıldığı için bu aşamaya gelmez. *(Ekip önerisi; müşteri doğrulaması bekliyor, CR-007.)* | M |
+| FR-AI-09 | Teknik bir aksaklık nedeniyle 24 saat içinde analiz edilemeyen yorum "analiz edilemedi" olarak kapatılır ve kullanıcının o şubedeki bekleyen yorum kilidi açılır; yorum B2B yanıtlarında "analiz edilemedi" durumuyla yer alır. Yorum, gönderim anında ödüle uygunsa (normal güven ve geçerli platform kanıtı, FR-QR-10), bütçe koruması (FR-AI-12) devrede değilse ve analiz LLM sağlayıcısına erişilemediği için (zaman aşımı, sunucu hatası, istek sınırı) yapılamadıysa ödüllendirilir; aksi halde ödülsüz kapatılır. LLM yanıtı tanımlı şemaya uymadığı için analiz edilemeyen yorum ödüllendirilmez, çünkü bu durum yorumun kendisinden (ör. prompt injection) kaynaklanabilir. AI dışı ön kontrolden geçemeyen yorum spam sayıldığı için bu aşamaya gelmez. *(Ekip önerisi; müşteri doğrulaması bekliyor, CR-007.)* | M |
 | FR-AI-10 | Yorum gönderimi idempotent olmalıdır: istemci her yorum için bir Idempotency-Key gönderir; aynı anahtarla tekrar gelen istek yeni yorum oluşturmaz, ilk isteğin sonucunu döner. | M |
 | FR-AI-11 | Her analiz; kullanılan model, prompt sürümü ve etiket listesi sürümüyle birlikte kaydedilmelidir. Prompt veya model değişikliği, değerlendirme setinde kalite hedeflerini (NFR-AIQ-01) karşılamadan yayına alınamaz. | M |
-| FR-AI-12 | Aylık LLM harcaması izlenmelidir. Bütçenin %80'inde yöneticiye uyarı gider; %100'ünde yeni analizler kuyrukta bekletilir ve alarm üretilir. Bütçe koruması devredeyken 24 saati dolan bekleyen yorumlar FR-AI-09 uyarınca ödülsüz kapatılır; kullanıcı o şubede yeni yorum gönderebilir. *(Ekip önerisi; müşteri doğrulaması bekliyor, CR-007.)* | M |
+| FR-AI-12 | Aylık LLM harcaması izlenmelidir. Bütçenin %80'inde yöneticiye uyarı gider; %100'ünde yeni analizler kuyrukta bekletilir ve alarm üretilir. Bütçe koruması devredeyken 24 saati dolan bekleyen yorumlar FR-AI-09 uyarınca ödülsüz kapatılır; kullanıcı o şubede yeni yorum gönderebilir. *(Ekip önerisi; müşteri doğrulaması bekliyor, CR-007.)* Uyarı ve alarm platform yöneticisine gider; aylık bütçe UTC takvim ayına göre hesaplanır (sağlayıcının faturasıyla aynı). Bütçe tutarı müşteri kararıdır (S-7, S-15). *(Ekip önerisi; müşteri doğrulaması bekliyor, CR-007.)* | M |
 
 ### 5.4 Oyunlaştırma (Gamification) Motoru
 
@@ -123,7 +123,7 @@ Kimlik, istemcinin beyan ettiği bir cihaz kimliğine değil, cihazın güvenli 
 | FR-GAM-03 | Tüm XP/puan değişiklikleri yalnızca eklenebilen, güncellenemeyen ve silinemeyen bir hareket kaydında (ledger) tutulmalıdır. Düzeltmeler yalnızca ters kayıtla yapılır. | M |
 | FR-GAM-04 | Aynı yorum için aynı tür ödül iki kez verilmemelidir (idempotent işleme). | M |
 | FR-GAM-05 | Seviye atlama gerçekleştiğinde bu bilgi mobil istemciye iletilebilmelidir. | S |
-| FR-GAM-06 | Yorumun durumu (analiz ediliyor / geçerli / geçersiz) ve kazanılan ödül istemci tarafından sorgulanabilmelidir. | M |
+| FR-GAM-06 | Yorumun durumu (analiz ediliyor / geçerli / spam / analiz edilemedi; API'de `analyzing`, `valid`, `spam`, `unanalyzed`) ve kazanılan ödül istemci tarafından sorgulanabilmelidir. | M |
 | FR-GAM-07 | Sonradan hile tespit edilen bir yorumun ödülü ters kayıtla geri alınabilmelidir. Geri alma bakiyeyi negatife düşürürse hesap işaretlenir. | M |
 | FR-GAM-08 | Puanlara son kullanma tarihi tanımlanabilmesi için ledger kayıtları kazanım tarihini taşımalıdır (politika: S-16). | S |
 
@@ -137,7 +137,7 @@ Kimlik, istemcinin beyan ettiği bir cihaz kimliğine değil, cihazın güvenli 
 | FR-B2B-04 | Marka, şube bazlı özet (duygu dağılımı, en sık konular, şikayet sayısı) alabilmelidir. Şikayet = duygusu "Hayal kırıklığı" veya "Öfkeli" olan geçerli yorum. | M |
 | FR-B2B-05 | Isı haritası için şube koordinatlarıyla eşleşmiş yorum/şikayet yoğunluğu verisi sunulmalıdır. | M |
 | FR-B2B-06 | Son kullanıcıyı tanımlayan hiçbir veri (kullanıcı kimliği, cihaz anahtarı vb.) B2B yanıtlarında yer almamalıdır. | M |
-| FR-B2B-07 | B2B yanıtlarında yorum metni yalnızca maskelenmiş haliyle yer almalıdır; spam sayılan yorumlar listelere, özetlere ve ısı haritasına dahil edilmemelidir. | M |
+| FR-B2B-07 | B2B yanıtlarında yorum metni yalnızca maskelenmiş haliyle yer almalıdır; spam sayılan yorumlar listelere, özetlere ve ısı haritasına dahil edilmemelidir. Maskelenmiş metni bulunmayan yorumda (ör. analiz hiç başlayamadan 24 saatte kapatılan yorum) metin alanı boş (`null`) döner; ham metin hiçbir durumda dönmez. *(Ekip önerisi; müşteri doğrulaması bekliyor, CR-007.)* | M |
 | FR-B2B-08 | Bir marka başka bir markaya ait bir kaynağı istediğinde 404 yanıtı dönmelidir; kaynağın varlığı sızdırılmaz. | M |
 | FR-B2B-09 | Her B2B erişimi (istemci, uç nokta, zaman, dönen kayıt sayısı) denetim kaydına yazılmalıdır. | S |
 | FR-B2B-10 | Tarih aralıkları ISO 8601 biçiminde ve saat dilimiyle birlikte verilir; saat dilimi belirtilmezse Europe/Istanbul kabul edilir. Günlük özetler İstanbul saatine göre günlere bölünür. Veri UTC olarak saklanır (CR-004). | M |
@@ -355,7 +355,12 @@ Demo sunumunda "biz şöyle önerdik, doğru mu?" kalıbıyla sorulacak ekip ön
 12. Seviye formülü: XP seviye atlayınca sıfırlanmaz; seviye 2 için 100, seviye 3 için 300 toplam XP (FR-GAM-02).
 13. B2B tarih aralıkları ve günlük özetler İstanbul saatine göre (FR-B2B-10).
 14. LLM sağlayıcısı OpenAI veya Anthropic olabilir; yurt dışı aktarım (KVKK) değerlendirmesi seçilen sağlayıcıyı kapsamalıdır (S-7, CR-006).
-15. 24 saat içinde analiz edilemeyen yorum her durumda "analiz edilemedi" olarak kapatılır ve kullanıcının o şubedeki kilidi açılır; ödül yalnızca yorum gönderimde ödüle uygunsa (normal güven ve geçerli platform kanıtı) ve bütçe koruması devrede değilse verilir (FR-AI-09, FR-AI-12; CR-007).
+15. 24 saat içinde analiz edilemeyen yorum her durumda "analiz edilemedi" olarak kapatılır ve kullanıcının o şubedeki kilidi açılır; ödül yalnızca yorum gönderimde ödüle uygunsa (normal güven ve geçerli platform kanıtı), bütçe koruması devrede değilse ve analiz LLM sağlayıcısına erişilemediği için yapılamadıysa verilir; LLM yanıtı şemaya uymadığı için analiz edilemeyen yorum ödülsüz kapatılır (FR-AI-09, FR-AI-12; CR-007).
+16. Markaya giden yorumda maskelenmiş metin yoksa metin alanı boş döner; ham metin hiçbir durumda gönderilmez (FR-B2B-07; CR-007).
+17. "Analiz edilemedi" yorumlar marka API'sinde duygu ve konu olmadan yer alır; toplam yorum sayısına ve ısı haritasındaki yorum sayısına dahildir, şikayet sayılmaz (FR-AI-09, FR-B2B-04, FR-B2B-05; CR-007).
+18. Aylık LLM bütçesinin tutarı (S-7, önerilen 300 USD) ve bütçe uyarılarının kime gideceği; ekip önerisi: platform yöneticisi, UTC takvim ayı (FR-AI-12, S-15; CR-007).
+19. Ödül hakkı yalnızca fiilen ödül verilen yorumla tüketilir; ödülsüz geçerli yorum kullanıcının o şubedeki ödül hakkını tüketmez (FR-QR-07; CR-007).
+20. Puanın kazanım tarihi, yorumun gönderim zamanıdır; puan son kullanma politikası için önemlidir (FR-GAM-08, S-16; CR-007).
 
 ### 11.4 Değişiklik Yönetimi
 
@@ -479,10 +484,16 @@ v1.0 baseline'dan sonra her değişiklik bir değişiklik talebiyle yapılır:
 | Alan | Değer |
 | --- | --- |
 | Kaynak | Geliştirme aşaması (S0-07 öncesi), tüm dokümanların ve kodun belirsizlik taraması; kararlar proje tanım metnine (`00-musteri-proje-metni.md`) dayandırıldı |
-| Durum | Ekip önerisi; müşteri doğrulaması bekliyor (11.3, madde 9 ve 15) |
-| Değişen gereksinimler | FR-AI-09, FR-AI-12, S-12, 11.3 madde 9 ve 15 |
+| Durum | Ekip önerisi; müşteri doğrulaması bekliyor (11.3, madde 9 ve 15–20) |
+| Değişen gereksinimler | FR-QR-07, FR-QR-09, FR-AI-09, FR-AI-12, FR-GAM-06, FR-B2B-07, S-12, 11.3 madde 9 ve 15–20 |
 
 **Gerekçe:**
 
 1. **İsim maskeleme vaadi tasarımla çelişiyordu.** 11.3 madde 9 ve CR-002, çalışan isimlerinin markaya iletilmeyeceğini söylüyordu; oysa FR-AI-07, SDD TZ-8 ve 8.6, isimlerin MVP'de maskelenmediğini (desen tabanlı maskeleme isimleri yakalayamaz) ve Tehdit Modeli T-I5 bunun kabul edilen bir kalan risk olduğunu belirtir. Müşteriye yapılmayan bir şey vaat edilmemesi için madde 9 düzeltildi: desenle yakalanan kişisel veriler maskelenir, isimler maskelenmez. Metindeki "temiz veri" beklentisi isim maskelemenin sonraki fazda eklenmesini gerektirir; ham metin şifreli saklandığı için eski yorumlar o zaman yeniden maskelenebilir.
 2. **24 saat kuralı kullanıcıyı kilitleyebiliyordu.** FR-AI-09 bütçe koruması devredeyken otomatik onayı uygulamıyor, FR-AI-12 yeni analizleri kuyrukta bekletiyordu; 24 saati dolan yorum "bekleyen yorum" olarak kalıyor ve kullanıcı o şubeye bütçe sıfırlanana kadar yeni yorum gönderemiyordu. Düşük güvenli yorumun 24 saatte ne olacağı da tanımsızdı ve ödül koşulu yalnızca "normal güven" diyordu; oysa ödül, gönderimdeki platform kanıtına da bağlıdır (FR-QR-10). Metin, XP'nin "her geçerli yorumla" verileceğini söyler ve geçerliliğe yapay zeka karar verir; analiz edilemeyen yorumun ödülü bu yüzden bir ekip önerisidir (S-12). Karar: yorum 24 saatte her durumda kapatılır ve kilit açılır; ödül yalnızca yorum gönderimde ödüle uygunsa ve bütçe koruması devrede değilse verilir. Ön kontrol koşulu kaldırıldı, çünkü ön kontrolden geçemeyen yorum zaten spam sonucu alır.
+3. **Analiz edilemeyen yorumun ödülü kötüye kullanılabiliyordu.** 24 saat kuralı, LLM'in yorumu analiz edemediği her durumda ödül veriyordu. Yanıtı sürekli şemaya aykırı hale getiren bir metin (ör. prompt injection) yapay zekanın onayını almadan ödül kazanabilirdi. Metin, ödülü yapay zekanın geçerli saydığı yoruma bağlar; bu yüzden otomatik ödül yalnızca sağlayıcıya erişilemediği (teknik aksaklık) durumda verilir, şemaya aykırı yanıtta yorum ödülsüz kapatılır (Tehdit Modeli T-T6).
+4. **Markaya giden metin her zaman bulunmayabilir.** Sözleşmede `textMasked` zorunlu bir metindi; oysa analiz hiç başlamadan 24 saatte kapatılan yorumun maskelenmiş metni yoktur. Metindeki "temiz veri" beklentisi gereği ham metin asla gönderilmez; bu durumda alan boş döner (API sözleşmesi 0.2.6-demo).
+5. **"Analiz edilemedi" yorumların B2B'deki yeri.** Duygu ve konusu olmadığı için şikayet sayılamaz; ama markanın verisidir ve yorum sayılarına dahildir (toplam ve ısı haritası).
+6. **Ödül hakkının tüketilmesi.** "Geçerli sayılan yorumla tüketilir" ifadesi, ödül almayan geçerli yorumda (düşük güven, kanıtsız, ödülsüz kapatılan) hakkın yanıp yanmadığını belirsiz bırakıyordu. Metin XP'yi geçerli yoruma bağlar; ödül verilmediyse hak tüketilmez.
+7. **Deneme tanımı ve terimler.** Deneme kabul edilen gönderimdir; reddedilen istek deneme değildir. FR-GAM-06'daki "geçersiz", API'deki `spam` ve `unanalyzed` durumlarıyla eşlendi.
+8. **Bütçe uyarıları.** "Yönetici" platform yöneticisidir; ay, sağlayıcının faturasıyla uyumlu olması için UTC takvim ayıdır. Tutar müşteri kararıdır.

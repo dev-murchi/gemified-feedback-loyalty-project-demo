@@ -9,8 +9,8 @@ Bu doküman, gereksinimlerin (SRS v1.6) ve tasarım kararlarının (SDD v1.3) na
 | Alan | Değer |
 | --- | --- |
 | Sürüm | 1.4 |
-| Dayandığı dokümanlar | SRS v1.6, SDD v1.3, Tehdit Modeli v1.0, API sözleşmesi 0.2.5-demo |
-| Değişiklik (1.4) | TC-AI-04 ve TC-AI-05: 24 saatte analiz edilemeyen yorum her durumda kapatılır; ödül yalnızca uygunsa ve bütçe koruması kapalıysa (SRS CR-007) |
+| Dayandığı dokümanlar | SRS v1.6, SDD v1.3, Tehdit Modeli v1.1, API sözleşmesi 0.2.6-demo |
+| Değişiklik (1.4) | TC-AI-04 ve TC-AI-05: 24 saatte analiz edilemeyen yorum her durumda kapatılır; ödül yalnızca uygunsa ve bütçe koruması kapalıysa. TC-AI-11: şemaya aykırı yanıt nedeniyle analiz edilemeyen yorum ödülsüz kapatılır (SRS CR-007) |
 | Değişiklik (1.3) | Test aracı Jest yerine Vitest: NestJS 12 yalnızca ESM; Vitest ESM'i doğal olarak destekler |
 
 ## 2. Test Seviyeleri ve Araçlar
@@ -109,6 +109,7 @@ Gerçek App Attest ve Play Integrity yanıtları otomatik testte üretilemediği
 | TC-AI-08 | Bütçenin %80 ve %100'ü | Uyarı; yeni analizler bekletilir | FR-AI-12 |
 | TC-AI-09 | Kontrol hanesi geçersiz 11 haneli sayı (ör. sipariş numarası) ve geçerli T.C. kimlik numarası | Yalnızca geçerli olan `[TCKN]` ile maskelenir | FR-AI-07, SDD 8.6 |
 | TC-AI-10 | Küfür içeren gerçek bir şikayet | Spam sayılmaz (değerlendirme setinde de yer alır) | FR-AI-08, SDD 8.1 |
+| TC-AI-11 | LLM her denemede şemaya aykırı yanıt verdiği için 24 saatte analiz edilemeyen, gönderimde ödüle uygun yorum | `unanalyzed` olarak ödülsüz kapatılır, şube kilidi açılır | FR-AI-09, Tehdit T-T6 |
 
 ## 4. AI Değerlendirme Süreci
 

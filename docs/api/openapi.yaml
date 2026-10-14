@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Geri Bildirim ve Sadakat Motoru API
-  version: 0.2.5-demo
+  version: 0.2.6-demo
   description: |
     Demo (Sprint 0) kapsamındaki uç noktaların sözleşmesi. Bu dosya, backend ile Flutter
     ekibi arasındaki anlaşmanın kaynağıdır (SDD ADR-006); uygulamanın ürettiği OpenAPI
@@ -1194,8 +1194,10 @@ components:
           type: string
           enum: [valid, unanalyzed]
         textMasked:
-          type: string
-          description: Kişisel verileri maskelenmiş metin; maskelenmemiş metin hiçbir zaman dönmez
+          type: [string, 'null']
+          description: >-
+            Kişisel verileri maskelenmiş metin; maskelenmemiş metin hiçbir zaman dönmez. Maskelenmiş
+            metni bulunmayan yorumda (ör. analiz hiç başlamadan 24 saatte kapatılan) `null` döner.
         sentiment:
           oneOf:
             - $ref: '#/components/schemas/Sentiment'
@@ -1266,7 +1268,9 @@ components:
               name: { type: string }
               lat: { type: number }
               lng: { type: number }
-              feedbackCount: { type: integer }
+              feedbackCount:
+                type: integer
+                description: Geçerli ve analiz edilemeyen yorumlar (spam hariç); şikayet sayısı yalnızca duygusu bilinen geçerli yorumlardan sayılır
               complaintCount: { type: integer }
 
     TopicList:

@@ -9,8 +9,8 @@ Bu doküman, SDD'deki mimariyi Domain-Driven Design ile kodlanabilir hale getiri
 | Alan | Değer |
 | --- | --- |
 | Sürüm | 1.2 |
-| Dayandığı dokümanlar | SRS v1.6, SDD v1.3, API sözleşmesi 0.2.5-demo |
-| Değişiklik (1.2) | 24 saat kuralı: yorum her durumda `unanalyzed` olarak kapatılır ve kilit açılır; ödül yalnızca uygunsa ve bütçe koruması kapalıysa (SRS CR-007) |
+| Dayandığı dokümanlar | SRS v1.6, SDD v1.3, API sözleşmesi 0.2.6-demo |
+| Değişiklik (1.2) | 24 saat kuralı: yorum her durumda `unanalyzed` olarak kapatılır ve kilit açılır; ödül yalnızca uygunsa, bütçe koruması kapalıysa ve son hata sağlayıcıya erişilememesiyse (SRS CR-007) |
 | Değişiklik (1.1) | Olay tiplerinin yeri: domain/events/, public/ yalnızca yeniden dışa aktarır |
 
 ## 2. Bounded Context'ler
@@ -163,7 +163,7 @@ Eşzamanlı iki istek aynı satırı yüklerse ikisi de kuralı geçebilir; bunu
 | Unsur | Tasarım |
 | --- | --- |
 | Aggregate | **FeedbackAnalysis** (kök; kimliği yorum kimliği) |
-| Invariant'lar | Sonuç bir kez kaydedilir. Denemeler, yorumun gönderiminden itibaren 24 saat içinde yapılır (FR-AI-05). Konu anahtarı, şubenin sektörüne ait etiket setinde bulunmalıdır; bulunmuyorsa yanıt şemaya aykırı sayılır (FR-AI-03, FR-AI-04). Her sonuç model, prompt sürümü ve etiket seti sürümüyle kaydedilir (FR-AI-11). |
+| Invariant'lar | Sonuç bir kez kaydedilir. Denemeler, yorumun gönderiminden itibaren 24 saat içinde yapılır (FR-AI-05). Konu anahtarı, şubenin sektörüne ait etiket setinde bulunmalıdır; bulunmuyorsa yanıt şemaya aykırı sayılır (FR-AI-03, FR-AI-04). Her sonuç model, prompt sürümü ve etiket seti sürümüyle kaydedilir (FR-AI-11). Başarısız denemenin türü kaydedilir: sağlayıcıya erişilemedi veya şemaya aykırı yanıt (FR-AI-09). |
 | Domain servisleri | `PreChecks` (AI dışı ön kontroller), `PiiMasker` (SDD 8.6 kuralları), `RetryPolicy` (üstel bekleme, 24 saat sınırı), `BudgetPolicy` (%80 / %100 eşikleri, FR-AI-12) |
 | Değer nesneleri | `MaskedText`, `Sentiment`, `TopicKey`, `SpamReason`, `AnalysisVerdict`, `LlmUsage`, `MicroUsd`, `PromptVersion` |
 | Yayınlanan olaylar | `FeedbackAnalyzed` |
@@ -216,7 +216,7 @@ Yalnızca bir tüketicisi olan olaylar tanımlanır; kullanılmayan olay yazılm
 - Bir iş akışında en fazla bir asenkron sınır vardır: `FeedbackSubmitted`. Asenkron olaylar yalnızca outbox üzerinden yayınlanır (ADR-005).
 - Olaylar geçmiş zaman kipinde adlandırılır ve değişmez değer nesneleridir.
 - Olay tipleri yayıncı context'in domain'inde tanımlanır (`src/contexts/<context>/domain/events/`); `<context>/public/` yalnızca tipi yeniden dışa aktarır (`export type { … }`). Tüketiciler olayı yalnızca yayıncının `public/` klasöründen içe aktarır, kendi kopyasını yazmaz. Olay dosyaları yalnızca shared kernel'i (tipli kimlikler, `DomainEvent`, `Date` ve ilkel tipler) kullanır; context'in kendi değer nesnelerini içe aktarmaz.
-- `FinalizeUnanalyzedFeedback`, 24 saatin sonunda hâlâ `analyzing` olan yorumu `unanalyzed` olarak kapatır ve `FeedbackAnalyzed` yerine doğrudan `FeedbackValidated` üretir (FR-AI-09). Ödül yalnızca yorum gönderimde ödüle uygunsa ve bütçe koruması devrede değilse verilir; aksi halde olay `rewardEligible: false` ile üretilir. Her iki durumda şubedeki kilit açılır. *(Ekip önerisi; müşteri doğrulaması bekliyor, SRS CR-007.)*
+- `FinalizeUnanalyzedFeedback`, 24 saatin sonunda hâlâ `analyzing` olan yorumu `unanalyzed` olarak kapatır ve `FeedbackAnalyzed` yerine doğrudan `FeedbackValidated` üretir (FR-AI-09). Ödül yalnızca yorum gönderimde ödüle uygunsa, bütçe koruması devrede değilse ve son analiz hatası sağlayıcıya erişilememesiyse verilir (şemaya aykırı yanıtta ödül yok, Tehdit Modeli T-T6); aksi halde olay `rewardEligible: false` ile üretilir. Her iki durumda şubedeki kilit açılır. *(Ekip önerisi; müşteri doğrulaması bekliyor, SRS CR-007.)*
 
 ## 7. Transaction Sınırları
 

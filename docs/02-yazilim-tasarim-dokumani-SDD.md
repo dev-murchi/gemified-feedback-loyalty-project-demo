@@ -347,7 +347,7 @@ erDiagram
 - `WALLETS` ledger'ın hızlı okunan özetidir; ledger kaydıyla aynı transaction'da güncellenir. `level` XP'den türetilir; formül değişirse yeniden hesaplanır.
 - `QR_CODES.token` en az 128 bit rastgelelikte ve tekildir (FR-QR-01).
 - `DEVICE_KEYS.key_identifier` tekildir (iOS: App Attest key ID; Android: açık anahtarın SHA-256 özeti).
-- Duygu, sabit 5 değerli bir enum'dur. Yorum durumu: `analyzing`, `valid`, `spam`, `unanalyzed` (FR-AI-09). Teknik aksaklıkta denemeler 24 saat sürer ve durum bu süre boyunca `analyzing` kalır; deneme sayısı ve son hata worker tarafından ayrıca kaydedilir (FR-AI-05). 24 saatin sonunda yorum her durumda `unanalyzed` olarak kapatılır (6.4).
+- Duygu, sabit 5 değerli bir enum'dur. Yorum durumu: `analyzing`, `valid`, `spam`, `unanalyzed` (FR-AI-09). Teknik aksaklıkta denemeler 24 saat sürer ve durum bu süre boyunca `analyzing` kalır; deneme sayısı ve son hata worker tarafından ayrıca kaydedilir (FR-AI-05). 24 saatin sonunda yorum her durumda `unanalyzed` olarak kapatılır (6.4). `FEEDBACKS.text_masked` maskeleme yapılamadan kapatılan yorumda NULL'dur; B2B bu durumda metni `null` döner, ham metni asla (SRS FR-B2B-07, CR-007).
 - Seviye toplam XP'den türetilir: L seviyesine ulaşmak için gereken toplam XP = 100 × L × (L − 1) / 2 (FR-GAM-02).
 - Konular sabit bir İngilizce anahtar (`key`, ör. `toilet_cleanliness`) ve Türkçe görünen ad (`name`) taşır; her sektörün listesinde "diğer" (`other`) konusu bulunur. Etiket adı değişse de anahtar sabit kaldığı için geçmiş veriler karşılaştırılabilir kalır (TZ-12).
 - Aggregate kökü tablolarında `version` sütunu iyimser kilit içindir (ADR-019). `FEEDBACKS.request_fingerprint`, aynı Idempotency-Key'in farklı gövdeyle tekrar kullanılmasını yakalar (FR-AI-10). `FEEDBACK_ANALYSES.attempts`, `next_attempt_at` ve `last_error` teknik aksaklıktaki yeniden deneme durumunu tutar (FR-AI-05).
@@ -428,7 +428,7 @@ REWARD_COOLDOWNS satırı, kullanıcı–şube çifti için üç bağımsız kur
 | Geçerli, normal güven | `last_rewarded_at = feedback.submitted_at`, `pending_feedback_id = NULL`; ledger + cüzdan | `pending_feedback_id = bu yorum` |
 | Geçerli, düşük güven | `pending_feedback_id = NULL`; ödül yok | `pending_feedback_id = bu yorum` |
 | Spam | `pending_feedback_id = NULL`; deneme geri alınmaz | `pending_feedback_id = bu yorum` |
-| 24 saatte analiz edilemedi (FR-AI-09) | `unanalyzed` olarak kapatılır; `pending_feedback_id = NULL` her durumda. Ledger + cüzdan yalnızca yorum gönderimde ödüle uygunsa (normal güven ve geçerli platform kanıtı) ve bütçe koruması devrede değilse; aksi halde ödül verilmez *(ekip önerisi; müşteri doğrulaması bekliyor, SRS CR-007)* | Süpürücü iş |
+| 24 saatte analiz edilemedi (FR-AI-09) | `unanalyzed` olarak kapatılır; `pending_feedback_id = NULL` her durumda; ödül verilmeyen kapanış `last_rewarded_at`'i değiştirmez, yani ödül hakkı tüketilmez. Ledger + cüzdan yalnızca yorum gönderimde ödüle uygunsa (normal güven ve geçerli platform kanıtı), bütçe koruması devrede değilse ve son hata sağlayıcıya erişilememesiyse (zaman aşımı, 5xx, 429); son hata şemaya aykırı yanıtsa ödül verilmez (T-T6) *(ekip önerisi; müşteri doğrulaması bekliyor, SRS CR-007)* | Süpürücü iş |
 
 `pending_feedback_id = bu yorum` koşulu iki iş görür: gecikmeli çalışan eski bir işin başka bir yorumun kilidini açmasını engeller ve geçişleri idempotent yapar. Ödül, gönderim zamanına göre hesaplandığı için analiz gecikmesi kullanıcının bekleme süresini uzatmaz.
 
@@ -557,6 +557,7 @@ Sağlayıcı `SentimentAnalyzer` port'unun arkasındadır (FR-AI-06). Worker eş
 - **Dar çıktı alanı:** Yalnızca sabit etiket kümelerinden seçim yapılabilen katı şema; serbest metin çıktısı yoktur.
 - **Saldırı yüzeyini daraltma:** 1.000 karakter sınırı ve şube başına 24 saatte 3 deneme, deneme–yanılmayı sınırlar.
 - **Ölçme:** Değerlendirme setinde injection örnekleri bulunur; bu örneklerde "geçerli" kararı bir kalite hatası sayılır.
+- **Analiz edilemeyen yorumda ödül yok:** LLM yanıtı şemaya aykırı olduğu için 24 saatte analiz edilemeyen yorum ödülsüz kapatılır; otomatik ödül yalnızca sağlayıcıya erişilemediğinde verilir (SRS FR-AI-09, CR-007; Tehdit Modeli T-T6). `FEEDBACK_ANALYSES.last_error` hatanın türünü de taşır: `provider_unavailable` veya `invalid_response`.
 
 ### 8.3 Kalite Güvencesi
 
@@ -590,11 +591,11 @@ Hedef tepe yükte sağlayıcının dakika başına ~700 istek ve ~500.000 token 
 
 ### 8.5 Bütçe Koruması (FR-AI-12)
 
-Analiz başına maliyet her analizde kaydedilir; aylık toplam Redis'te tutulur ve saatlik olarak veritabanıyla uzlaştırılır.
+Analiz başına maliyet her analizde kaydedilir; aylık toplam Redis'te tutulur ve saatlik olarak veritabanıyla uzlaştırılır. Ay, sağlayıcının faturasıyla uyumlu olması için UTC takvim ayıdır; uyarı ve alarmlar platform yöneticisine gider *(ekip önerisi, SRS CR-007)*.
 
 | Eşik | Davranış |
 | --- | --- |
-| %80 | Yöneticiye uyarı |
+| %80 | Platform yöneticisine uyarı (alarm ve uyarı logu) |
 | %100 | Yeni analiz işleri kuyrukta bekletilir; alarm üretilir; 24 saati dolan bekleyen yorumlar ödülsüz `unanalyzed` olarak kapatılır: bütçe tükendiğinde spam'in otomatik ödüllendirilmesi önlenir ve kullanıcı o şubede kilitli kalmaz (SRS CR-007) |
 
 ### 8.6 Maskeleme Kuralları
