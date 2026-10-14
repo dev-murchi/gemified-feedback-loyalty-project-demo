@@ -11,7 +11,7 @@ Bu doküman, sistemin güvenlik kararlarının hangi tehditlere karşı alındı
 | Sürüm | 1.0 |
 | Kapsam | Backend, mobil istemciyle ve marka sistemleriyle olan arayüzleri, dış servis bağımlılıkları |
 | Kapsam dışı | Flutter uygulamasının iç güvenliği (mobil ekibin sorumluluğu), AWS'nin kendi altyapı güvenliği |
-| Dayandığı dokümanlar | SRS v1.5, SDD v1.2 |
+| Dayandığı dokümanlar | SRS v1.6, SDD v1.2 |
 | Gözden geçirme | Her mimari değişiklikte ve en az üç ayda bir |
 
 ## 2. Korunan Varlıklar

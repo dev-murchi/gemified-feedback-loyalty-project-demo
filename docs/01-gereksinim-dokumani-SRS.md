@@ -9,7 +9,7 @@ Bu doküman, "Geri Bildirim ve Sadakat Motoru" backend'inin MVP sürümünde ne 
 | Alan | Değer |
 | --- | --- |
 | Doküman türü | Yazılım Gereksinim Spesifikasyonu (SRS) – MVP |
-| Sürüm | 1.5 (v1.0 baseline + CR-002..CR-006; müşteri doğrulaması bekliyor) |
+| Sürüm | 1.6 (v1.0 baseline + CR-002..CR-007; müşteri doğrulaması bekliyor) |
 | Kaynak | Proje sahibinin paylaştığı proje tanım metni (`00-musteri-proje-metni.md`) |
 | Kapsam | Yalnızca backend; mobil (Flutter) ve B2B panel arayüzü kapsam dışı |
 | İlgili dokümanlar | Yazılım Tasarım Dokümanı (`02`), Tehdit Modeli (`03`), Test Stratejisi (`04`) |
@@ -349,7 +349,7 @@ Demo sunumunda "biz şöyle önerdik, doğru mu?" kalıbıyla sorulacak ekip ön
 6. Kişisel veriler maskelenerek yurt dışındaki LLM'e gönderilir (S-8, S-13).
 7. Puan MVP'de yalnızca birikir; ödüle dönüşümü ve sorumlusu sonraki fazda belirlenir (S-5).
 8. Spam sayılan yorum ödül hakkını yakmaz; şube başına 24 saatte en fazla 3 deneme (FR-QR-09).
-9. Markalar yorumların yalnızca maskelenmiş halini görür; çalışan isimleri markaya iletilmez (FR-B2B-07).
+9. Markalar yorumların yalnızca maskelenmiş halini görür: telefon, e-posta, plaka, T.C. kimlik numarası, IBAN ve kart numarası maskelenir. Çalışan ve müşteri isimleri MVP'de maskelenmez; bu yüzden bir yorumdaki isim markaya ulaşabilir (bilinen sınır, SDD TZ-8; Türkçe isim tanıma sonraki fazdadır) (FR-B2B-07, FR-AI-07; CR-007).
 10. Ham metin şifreli saklanır ve 2 yıl sonra silinir (FR-PRIV-03, NFR-PRIV-02).
 11. AI kalite hedefleri (NFR-AIQ-01) ve haftalık insan kontrolü (NFR-AIQ-02).
 12. Seviye formülü: XP seviye atlayınca sıfırlanmaz; seviye 2 için 100, seviye 3 için 300 toplam XP (FR-GAM-02).
@@ -409,7 +409,7 @@ v1.0 baseline'dan sonra her değişiklik bir değişiklik talebiyle yapılır:
 
 1. **Ödül hakkı ve spam:** Yapay zeka yanılabilir; gerçek ama kısa bir şikayet spam sayılırsa kullanıcının 24 saat beklemesi hem kullanıcıyı hem markanın en değerli verisini kaybettirir. Öte yandan sınırsız deneme, AI'ın deneme–yanılmayla kandırılmasına (prompt injection) kapı açar. Karar: spam ödül hakkını tüketmez, deneme sayısı 24 saatte 3 ile sınırlıdır; bir yorum incelenirken aynı şubeye yeni yorum gönderilemez.
 2. **Idempotency:** Mobil istemci ağ zaman aşımı sonrası isteği tekrarladığında kullanıcı hatalı biçimde reddediliyordu. Idempotency-Key ile tekrar eden istek ilk sonucu döner.
-3. **Maskelenmiş metin:** Markalar çalışan isimlerini görmez; KVKK riski azalır. Bedeli, markanın şikayeti belirli bir çalışanla ilişkilendirememesidir.
+3. **Maskelenmiş metin:** Markalar çalışan isimlerini görmez; KVKK riski azalır. Bedeli, markanın şikayeti belirli bir çalışanla ilişkilendirememesidir. *(CR-007 ile düzeltildi: isimler MVP'de maskelenmez; yalnızca desenle yakalanan kişisel veriler maskelenir.)*
 4. **Ham metin:** Maskeleme algoritmasının sonradan iyileştirilebilmesi için saklanır, ancak şifreli, erişimi kısıtlı ve süreli olarak.
 
 ### CR-003 – Güvenlik, kalite ve operasyon gereksinimlerinin profesyonelleştirilmesi
@@ -472,3 +472,15 @@ v1.0 baseline'dan sonra her değişiklik bir değişiklik talebiyle yapılır:
 | Değişen gereksinimler | S-7 |
 
 **Gerekçe:** S-7 MVP için yalnızca OpenAI'ı öngörüyordu. Model seçimi tahminle değil ölçümle yapılacağı için (ADR-018) Anthropic'in küçük modeli de aday olarak eklendi; değerlendirme setinde kalite hedeflerini (NFR-AIQ-01) karşılayan en düşük maliyetli model seçilir. Sağlayıcı değişirse yurt dışı veri aktarımı değerlendirmesi de o sağlayıcı için yapılmalıdır.
+
+### CR-007 – Belirsizliklerin giderilmesi (geliştirme sırasında yapılan gözden geçirme)
+
+| Alan | Değer |
+| --- | --- |
+| Kaynak | Geliştirme aşaması (S0-07 öncesi), tüm dokümanların ve kodun belirsizlik taraması; kararlar proje tanım metnine (`00-musteri-proje-metni.md`) dayandırıldı |
+| Durum | Ekip önerisi; müşteri doğrulaması bekliyor (11.3, madde 9) |
+| Değişen gereksinimler | 11.3 madde 9 |
+
+**Gerekçe:**
+
+1. **İsim maskeleme vaadi tasarımla çelişiyordu.** 11.3 madde 9 ve CR-002, çalışan isimlerinin markaya iletilmeyeceğini söylüyordu; oysa FR-AI-07, SDD TZ-8 ve 8.6, isimlerin MVP'de maskelenmediğini (desen tabanlı maskeleme isimleri yakalayamaz) ve Tehdit Modeli T-I5 bunun kabul edilen bir kalan risk olduğunu belirtir. Müşteriye yapılmayan bir şey vaat edilmemesi için madde 9 düzeltildi: desenle yakalanan kişisel veriler maskelenir, isimler maskelenmez. Metindeki "temiz veri" beklentisi isim maskelemenin sonraki fazda eklenmesini gerektirir; ham metin şifreli saklandığı için eski yorumlar o zaman yeniden maskelenebilir.

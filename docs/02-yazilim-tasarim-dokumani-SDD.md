@@ -4,13 +4,13 @@
 
 ## 1. Doküman Bilgisi
 
-Bu doküman, Gereksinim Dokümanı v1.5'teki gereksinimlerin nasıl karşılanacağını tanımlar: sistemin karakteristikleri, mimarisi, teknik riskleri, tasarım kararları, veri modeli, güvenlik ve yapay zeka tasarımı ile dağıtım mimarisi.
+Bu doküman, Gereksinim Dokümanı v1.6'daki gereksinimlerin nasıl karşılanacağını tanımlar: sistemin karakteristikleri, mimarisi, teknik riskleri, tasarım kararları, veri modeli, güvenlik ve yapay zeka tasarımı ile dağıtım mimarisi.
 
 | Alan | Değer |
 | --- | --- |
 | Doküman türü | Yazılım Tasarım Dokümanı (SDD) – MVP |
 | Sürüm | 1.2 (12 Ekim 2026: LEDGER_ENTRIES.xp_total_after; geliştirme sırasında, S0-06). 1.1 (11 Ekim 2026: geliştirme başlangıcı; ADR-019..021, alan modeliyle hizalama). 1.0: tasarım aşaması kapanış sürümü, 10 Ekim 2026 |
-| Dayandığı doküman | Gereksinim Dokümanı (SRS) v1.5 (`01-gereksinim-dokumani-SRS.md`) |
+| Dayandığı doküman | Gereksinim Dokümanı (SRS) v1.6 (`01-gereksinim-dokumani-SRS.md`) |
 | İlgili dokümanlar | Tehdit Modeli (`03-tehdit-modeli.md`), Test Stratejisi (`04-test-stratejisi.md`), Alan Modeli (`06-alan-modeli.md`), Mühendislik Standartları (`07-muhendislik-standartlari.md`), Sprint 0 Backlog (`08-sprint-0-backlog.md`) |
 | SDLC aşaması | Geliştirme (Sprint 0) |
 

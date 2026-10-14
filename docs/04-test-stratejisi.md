@@ -4,12 +4,12 @@
 
 ## 1. Amaç
 
-Bu doküman, gereksinimlerin (SRS v1.5) ve tasarım kararlarının (SDD v1.2) nasıl doğrulanacağını tanımlar. Odak, sistemin en pahalı hatalarıdır: çift veya kayıp ödül, markalar arası veri sızıntısı, sahte kimlikle ödül toplama ve fark edilmeden düşen AI kalitesi.
+Bu doküman, gereksinimlerin (SRS v1.6) ve tasarım kararlarının (SDD v1.2) nasıl doğrulanacağını tanımlar. Odak, sistemin en pahalı hatalarıdır: çift veya kayıp ödül, markalar arası veri sızıntısı, sahte kimlikle ödül toplama ve fark edilmeden düşen AI kalitesi.
 
 | Alan | Değer |
 | --- | --- |
 | Sürüm | 1.3 |
-| Dayandığı dokümanlar | SRS v1.5, SDD v1.2, Tehdit Modeli v1.0, API sözleşmesi 0.2.5-demo |
+| Dayandığı dokümanlar | SRS v1.6, SDD v1.2, Tehdit Modeli v1.0, API sözleşmesi 0.2.5-demo |
 | Değişiklik (1.3) | Test aracı Jest yerine Vitest: NestJS 12 yalnızca ESM; Vitest ESM'i doğal olarak destekler |
 
 ## 2. Test Seviyeleri ve Araçlar
