@@ -10,7 +10,7 @@ Bu doküman, gereksinimlerin (SRS v1.6) ve tasarım kararlarının (SDD v1.3) na
 | --- | --- |
 | Sürüm | 1.4 |
 | Dayandığı dokümanlar | SRS v1.6, SDD v1.3, Tehdit Modeli v1.1, API sözleşmesi 0.2.7-demo |
-| Değişiklik (1.4) | TC-AI-04 ve TC-AI-05: 24 saatte analiz edilemeyen yorum her durumda kapatılır; ödül yalnızca uygunsa ve bütçe koruması kapalıysa. TC-AI-11: şemaya aykırı yanıt nedeniyle analiz edilemeyen yorum ödülsüz kapatılır (SRS CR-007). TC-AUTH-04: imza geçersizse ret, platform kararı olumsuzsa düşük güven. US-06: silmede ledger değişmez (SRS CR-007) |
+| Değişiklik (1.4) | TC-AI-04 ve TC-AI-05: 24 saatte analiz edilemeyen yorum her durumda kapatılır; ödül yalnızca uygunsa ve bütçe koruması kapalıysa. TC-AI-11: şemaya aykırı yanıt nedeniyle analiz edilemeyen yorum ödülsüz kapatılır (SRS CR-007). TC-AUTH-04: imza geçersizse ret, platform kararı olumsuzsa düşük güven. US-06: silmede ledger değişmez. TC-QR-10..11, TC-GAM-07..08, TC-AUTH-10, TC-B2B-08..10, TC-AI-12..15, 3.7 Kişisel Veri: test karşılığı olmayan Must gereksinimler eşlendi (SRS CR-007) |
 | Değişiklik (1.3) | Test aracı Jest yerine Vitest: NestJS 12 yalnızca ESM; Vitest ESM'i doğal olarak destekler |
 
 ## 2. Test Seviyeleri ve Araçlar
@@ -38,7 +38,7 @@ Test piramidi gözetilir: kuralların büyük kısmı hızlı birim testleriyle,
 | ID | Senaryo | Beklenen sonuç | Gereksinim |
 | --- | --- | --- | --- |
 | TC-QR-01 | Aynı kullanıcı–şube için 20 paralel yorum isteği | Yalnızca biri kabul edilir | FR-QR-04 |
-| TC-QR-02 | Ödüllü yorumdan 23 saat 59 dakika sonra yeni yorum | `REWARD_COOLDOWN` ile reddedilir | FR-QR-07 |
+| TC-QR-02 | Ödüllü yorumdan 23 saat 59 dakika sonra yeni yorum | `REWARD_COOLDOWN` ile reddedilir | FR-QR-03, FR-QR-07 |
 | TC-QR-03 | Deneme penceresinin 23. saatinde ödül alınıp pencere bittikten 1 saat sonra yeni yorum | `REWARD_COOLDOWN` ile reddedilir (önceki tasarım hatasının regresyon testi) | FR-QR-07 |
 | TC-QR-04 | Spam sonrası yeni yorum | Kabul edilir; deneme sayısı 2 | FR-QR-09 |
 | TC-QR-05 | Penceredeki 4. deneme | `ATTEMPTS_EXHAUSTED` ile reddedilir | FR-QR-09 |
@@ -46,6 +46,9 @@ Test piramidi gözetilir: kuralların büyük kısmı hızlı birim testleriyle,
 | TC-QR-07 | Bilinmeyen, iptal edilmiş, biçimi bozuk token | `QR_INVALID`; deneme loglanır | FR-QR-02, FR-QR-05 |
 | TC-QR-09 | Denemeler T, T+23:58 ve T+23:59'da; ardından T+24:01'de 4. ve T+24:02'de 5. deneme | 4. deneme kabul edilir (son 24 saatte 2 deneme var); 5. deneme `ATTEMPTS_EXHAUSTED` ile reddedilir. Fixed window bu durumda 5. denemeyi de kabul ederdi (regresyon testi) | FR-QR-09, ADR-016 |
 | TC-QR-08 | Gecikmeli eski bir analiz işinin yeni bir yorumun kilidini açmaya çalışması | Etkisiz kalır (`pending_feedback_id` koşulu) | SDD 6.4 |
+| TC-QR-10 | Aynı Idempotency-Key ile aynı gövde tekrar gönderilir; ayrıca aynı anahtar farklı gövdeyle | İlk isteğin sonucu döner, yeni yorum oluşmaz, deneme sayılmaz; farklı gövde `422 IDEMPOTENCY_KEY_MISMATCH` | FR-AI-10 |
+| TC-QR-11 | QR kodu üretimi, iptali ve yenisinin üretilmesi | Token en az 128 bit rastgele ve platform alan adındaki bağlantıda; iptal edilen token `QR_INVALID`, yenisi aynı şubeye çözülür | FR-QR-01 |
+| TC-QR-12 | Aynı IP'den farklı doğrulanmış cihazlar; ayrıca tek cihazdan sınırı aşan istekler | Sınır cihaz kimliğine göre uygulanır: diğer cihazlar etkilenmez, sınırı aşan cihaz `429 RATE_LIMITED` alır | FR-QR-06 |
 
 ### 3.2 Ödül ve Ledger
 
@@ -57,6 +60,9 @@ Test piramidi gözetilir: kuralların büyük kısmı hızlı birim testleriyle,
 | TC-GAM-04 | Rastgele işlem dizilerinden sonra cüzdan–ledger uzlaştırması | Bakiye her zaman ledger toplamına eşit (özellik tabanlı test) | NFR-DATA-01 |
 | TC-GAM-05 | Toplam XP 99, 100, 299, 300 | Seviye sırasıyla 1, 2, 2, 3; XP seviye atlayınca sıfırlanmaz | FR-GAM-02 |
 | TC-GAM-06 | Analiz sonucu yazılırken transaction'ın ortasında hata | Ne analiz ne ödül yazılır; iş yeniden denendiğinde tutarlı sonuç | ADR-014 |
+| TC-GAM-07 | Geçerli sayılan yorum; varsayılan ve değiştirilmiş ödül yapılandırması | Varsayılanda 10 XP ve 5 puan; değiştirilmiş yapılandırmada yapılandırılan değerler | FR-GAM-01 |
+| TC-GAM-08 | Yeni kullanıcının ve 250 XP'li kullanıcının cüzdan sorgusu | Yeni: XP 0, puan 0, seviye 1, sonraki seviyeye 100. 250 XP: seviye 2, sonraki seviyeye 50 | FR-AUTH-04, FR-AUTH-05 |
+| TC-GAM-09 | Her durumdaki yorumun (`analyzing`, `valid`, `spam`, `unanalyzed`) durum sorgusu | Durum doğru; `reward` yalnızca ödül verilmişse dolu, seviye atlandıysa `levelUp` dolu | FR-GAM-06 |
 
 ### 3.3 Kimlik ve Güven
 
@@ -71,6 +77,7 @@ Test piramidi gözetilir: kuralların büyük kısmı hızlı birim testleriyle,
 | TC-AUTH-07 | Gövdesi değiştirilmiş yorum isteği (kanıt eski gövdeye ait) | Düşük güven; ödül yok | FR-QR-10 |
 | TC-AUTH-08 | Süresi dolmuş erişim token'ı | 401 | FR-AUTH-03 |
 | TC-AUTH-09 | Üretim yapılandırmasında geliştirme doğrulayıcısının açılması | Uygulama başlamaz | Tehdit T-E3 |
+| TC-AUTH-10 | Aynı doğrulanmış anahtarla yeni bir challenge üzerinden tekrar kayıt; ayrıca aynı anahtarla eşzamanlı iki kayıt | Mevcut kullanıcı döner; yeni kullanıcı veya cüzdan açılmaz | FR-AUTH-02 |
 
 Gerçek App Attest ve Play Integrity yanıtları otomatik testte üretilemediği için doğrulayıcılar, gerçek cihazlardan kaydedilmiş örnek attestation nesneleri ve elle hazırlanmış geçersiz varyantlarıyla test edilir. Gerçek cihaz testi staging'de yapılır.
 
@@ -84,6 +91,9 @@ Gerçek App Attest ve Play Integrity yanıtları otomatik testte üretilemediği
 | TC-B2B-04 | Kapsamı olmayan uç noktaya erişim | 403 | ADR-013 |
 | TC-B2B-05 | İptal edilmiş veya süresi dolmuş istemci | Token alınamaz | FR-B2B-01 |
 | TC-B2B-06 | Sayfalama sırasında yeni yorum eklenmesi | Tekrar eden veya atlanan kayıt yok | FR-B2B-03 |
+| TC-B2B-08 | Şube listesi | Yalnızca token'ın markasına ait şubeler döner | FR-B2B-02 |
+| TC-B2B-09 | Duygu ve konusu bilinen bir yorum setiyle şube özeti | Duygu dağılımı, en sık konular ve şikayet sayısı (yalnızca "Hayal kırıklığı" veya "Öfkeli" geçerli yorumlar) doğru; spam sayılmaz, analiz edilemeyenler ayrı sayılır | FR-B2B-04 |
+| TC-B2B-10 | Aynı setle ısı haritası | Her şube koordinatıyla döner; yorum sayısına geçerli ve analiz edilemeyen yorumlar girer, spam girmez; şikayet sayısı özetle aynı | FR-B2B-05 |
 | TC-B2B-07 | İstanbul saatiyle 23:30'da yapılan yorum, saat dilimi belirtilmeden günlük özet istendiğinde | Yorum İstanbul takvimindeki güne sayılır (UTC'deki bir önceki güne değil) | FR-B2B-10 |
 
 ### 3.5 API Sözleşmesi
@@ -110,6 +120,19 @@ Gerçek App Attest ve Play Integrity yanıtları otomatik testte üretilemediği
 | TC-AI-09 | Kontrol hanesi geçersiz 11 haneli sayı (ör. sipariş numarası) ve geçerli T.C. kimlik numarası | Yalnızca geçerli olan `[TCKN]` ile maskelenir | FR-AI-07, SDD 8.6 |
 | TC-AI-10 | Küfür içeren gerçek bir şikayet | Spam sayılmaz (değerlendirme setinde de yer alır) | FR-AI-08, SDD 8.1 |
 | TC-AI-11 | LLM her denemede şemaya aykırı yanıt verdiği için 24 saatte analiz edilemeyen, gönderimde ödüle uygun yorum | `unanalyzed` olarak ödülsüz kapatılır, şube kilidi açılır | FR-AI-09, Tehdit T-T6 |
+| TC-AI-12 | Kabul edilen yorum | Aynı transaction'da outbox'a yazılır, analiz işi kuyruğa girer ve yapılandırılmış sonuç kaydedilir | FR-AI-02 |
+| TC-AI-13 | LLM'in şubenin sektör listesinde olmayan bir konu döndürmesi; ayrıca etiket listesinin yeni sürümü | Liste dışı konu şemaya aykırı sayılır; yeni sürüm yalnızca sonraki analizlerde kullanılır, eski analizler eski sürümle kalır | FR-AI-04 |
+| TC-AI-14 | Analysis sözleşme test paketinin her `SentimentAnalyzer` adapter'ına (sahte, OpenAI) karşı çalıştırılması | Hepsi geçer; adapter `LLM_DRIVER` ile kod değişmeden seçilir | FR-AI-06 |
+| TC-AI-15 | Tamamlanan analiz kaydı | Model, prompt sürümü ve etiket listesi sürümü kayıtlıdır | FR-AI-11 |
+
+### 3.7 Kişisel Veri
+
+| ID | Senaryo | Beklenen sonuç | Gereksinim |
+| --- | --- | --- | --- |
+| TC-PRIV-01 | 2 yılı dolan yorumlar üzerinde saklama işi | Ham metin silinir; maskelenmiş metin ve analiz sonucu yorum düzeyinde silinir, toplu istatistikler değişmez | FR-PRIV-03 |
+| TC-PRIV-02 | Silme talebi | US-06 kabul testi (Bölüm 6) | FR-PRIV-02 |
+
+FR-PRIV-01 (aydınlatma metni ve rıza) uygulamada gerçekleşir; backend testi yoktur, uygulama ekibinin kabul testine bırakılır.
 
 ## 4. AI Değerlendirme Süreci
 

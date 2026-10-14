@@ -9,7 +9,7 @@ Bu doküman, Gereksinim Dokümanı v1.6'daki gereksinimlerin nasıl karşılanac
 | Alan | Değer |
 | --- | --- |
 | Doküman türü | Yazılım Tasarım Dokümanı (SDD) – MVP |
-| Sürüm | 1.3 (15 Ekim 2026: SRS CR-007 belirsizlik düzeltmeleri: 24 saat kuralı, silme talebi, platform kanıtının bağlandığı veri, kayıtta ret ve düşük güven ayrımı, kontrol karakterleri; ekip önerisi, müşteri doğrulaması bekliyor). 1.2 (12 Ekim 2026: LEDGER_ENTRIES.xp_total_after; geliştirme sırasında, S0-06). 1.1 (11 Ekim 2026: geliştirme başlangıcı; ADR-019..021, alan modeliyle hizalama). 1.0: tasarım aşaması kapanış sürümü, 10 Ekim 2026 |
+| Sürüm | 1.3 (15 Ekim 2026: SRS CR-007 belirsizlik düzeltmeleri: 24 saat kuralı, silme talebi, platform kanıtının bağlandığı veri, kayıtta ret ve düşük güven ayrımı, kontrol karakterleri, demoda gösterilmeyen Must gereksinimler; ekip önerisi, müşteri doğrulaması bekliyor). 1.2 (12 Ekim 2026: LEDGER_ENTRIES.xp_total_after; geliştirme sırasında, S0-06). 1.1 (11 Ekim 2026: geliştirme başlangıcı; ADR-019..021, alan modeliyle hizalama). 1.0: tasarım aşaması kapanış sürümü, 10 Ekim 2026 |
 | Dayandığı doküman | Gereksinim Dokümanı (SRS) v1.6 (`01-gereksinim-dokumani-SRS.md`) |
 | İlgili dokümanlar | Tehdit Modeli (`03-tehdit-modeli.md`), Test Stratejisi (`04-test-stratejisi.md`), Alan Modeli (`06-alan-modeli.md`), Mühendislik Standartları (`07-muhendislik-standartlari.md`), Sprint 0 Backlog (`08-sprint-0-backlog.md`) |
 | SDLC aşaması | Geliştirme (Sprint 0) |
@@ -697,6 +697,20 @@ Demo, müşteri metnindeki beş modülün temel özelliklerini (SRS Bölüm 4) u
 | B2B API | Markanın kendi şubeleri, yorumları, şube özeti ve ısı haritası verisi; başka markanın verisine 404 | Gerçek; kimlik doğrulama basit client credentials token uç noktası ile |
 
 **Demonun dışında kalanlar:** AWS kurulumu (yerelde Docker Compose), gerçek App Attest / Play Integrity, KMS (aynı arayüzün yerel anahtarlı adapter'ı), bütçe koruması, saklama ve silme işleri, OAuth2'nin tamamı.
+
+**Demoda gösterilmeyen veya kısmen gösterilen Must gereksinimler:** Bunlar MVP kapsamındadır; demo sonrası, MVP teslimine kadar tamamlanır *(SRS CR-007)*.
+
+| Gereksinim | Demodaki durumu |
+| --- | --- |
+| FR-AUTH-06, FR-QR-10 | Kısmen: akış ve düşük güven modu gerçek; platform doğrulaması ve kanıt yerine geliştirme doğrulayıcısı |
+| FR-AUTH-07 | Gösterilmez: cihaz anahtarının iptali |
+| FR-QR-06 | Gösterilmez: doğrulanmış kimliğe bağlı hız sınırı (S0-10'da Should) |
+| FR-AI-11 | Kısmen: model, prompt ve etiket listesi sürümü kaydedilir; değerlendirme kapısı CI'da çalışmaz, model seçimi tek seferlik ölçümle yapılır (S0-13) |
+| FR-AI-12 | Gösterilmez: bütçe izleme ve bütçe koruması |
+| FR-GAM-07 | Gösterilmez: ödülün ters kayıtla geri alınması |
+| FR-B2B-01 | Kısmen: tek istemci kimliğiyle basit token uç noktası; çoklu kimlik, rotasyon ve son kullanma tarihi yönetimi yok |
+| FR-PRIV-01 | Backend kapsamı dışında: aydınlatma metni ve rıza ekranı uygulamadadır; metin ve rıza gereksinimi hukuk değerlendirmesine bağlıdır (SRS S-13) |
+| FR-PRIV-02, FR-PRIV-03 | Gösterilmez: silme talebi ve saklama süresi işleri |
 
 ### 11.2 Geliştirme Sırası (Clean Architecture, ADR-017)
 
