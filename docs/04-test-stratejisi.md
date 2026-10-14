@@ -10,7 +10,7 @@ Bu doküman, gereksinimlerin (SRS v1.6) ve tasarım kararlarının (SDD v1.3) na
 | --- | --- |
 | Sürüm | 1.4 |
 | Dayandığı dokümanlar | SRS v1.6, SDD v1.3, Tehdit Modeli v1.1, API sözleşmesi 0.2.7-demo |
-| Değişiklik (1.4) | TC-AI-04 ve TC-AI-05: 24 saatte analiz edilemeyen yorum her durumda kapatılır; ödül yalnızca uygunsa ve bütçe koruması kapalıysa. TC-AI-11: şemaya aykırı yanıt nedeniyle analiz edilemeyen yorum ödülsüz kapatılır (SRS CR-007). TC-AUTH-04: imza geçersizse ret, platform kararı olumsuzsa düşük güven. US-06: silmede ledger değişmez. TC-QR-10..11, TC-GAM-07..08, TC-AUTH-10, TC-B2B-08..10, TC-AI-12..15, 3.7 Kişisel Veri: test karşılığı olmayan Must gereksinimler eşlendi (SRS CR-007) |
+| Değişiklik (1.4) | TC-AI-04 ve TC-AI-05: 24 saatte analiz edilemeyen yorum her durumda kapatılır; ödül yalnızca uygunsa ve bütçe koruması kapalıysa. TC-AI-11: şemaya aykırı yanıt nedeniyle analiz edilemeyen yorum ödülsüz kapatılır (SRS CR-007). TC-AUTH-04: imza geçersizse ret, platform kararı olumsuzsa düşük güven. US-06: silmede ledger değişmez. TC-QR-10..11, TC-GAM-07..08, TC-AUTH-10, TC-B2B-08..10, TC-AI-12..15, 3.7 Kişisel Veri: test karşılığı olmayan Must gereksinimler eşlendi. Bölüm 2: G-2 ifadesi ADR-019 ile hizalandı (SRS CR-007) |
 | Değişiklik (1.3) | Test aracı Jest yerine Vitest: NestJS 12 yalnızca ESM; Vitest ESM'i doğal olarak destekler |
 
 ## 2. Test Seviyeleri ve Araçlar
@@ -18,8 +18,8 @@ Bu doküman, gereksinimlerin (SRS v1.6) ve tasarım kararlarının (SDD v1.3) na
 | Seviye | Neyi doğrular | Araç | Ne zaman çalışır |
 | --- | --- | --- | --- |
 | Birim | Domain kuralları: ödül hakkı kuralları, seviye hesabı, durum geçişleri, maskeleme desenleri | Vitest | Her commit |
-| Repository sözleşme | G-1..G-3 garantileri (atomik koşullu güncelleme, tekil kısıt, transaction) port seviyesinde tanımlanır; aynı test paketi önce bellek içi, sonra veritabanı adapter'ına karşı çalışır (SDD ADR-017) | Vitest | Her commit |
-| Entegrasyon | Repository adapter'larının gerçek veritabanı ve Redis ile davranışı: atomik koşullu güncelleme, tekil kısıtlar, transaction sınırları, outbox | Vitest + Testcontainers (PostgreSQL, Redis) | Her commit |
+| Repository sözleşme | G-1..G-3 garantileri (transaction, sürüme bağlı koşullu güncelleme, tekil kısıt) port seviyesinde tanımlanır; aynı test paketi önce bellek içi, sonra veritabanı adapter'ına karşı çalışır (SDD ADR-017) | Vitest | Her commit |
+| Entegrasyon | Repository adapter'larının gerçek veritabanı ve Redis ile davranışı: sürüme bağlı koşullu güncelleme (iyimser kilit), tekil kısıtlar, transaction sınırları, outbox | Vitest + Testcontainers (PostgreSQL, Redis) | Her commit |
 | Eşzamanlılık | Aynı kullanıcı–şube için paralel istekler, tekrarlanan worker işleri | Testcontainers + paralel istemciler | Her commit |
 | Sözleşme | Uygulamanın ürettiği OpenAPI'nin `openapi.yaml` ile uyumu; Flutter için sözleşmeden üretilen mock sunucu | OpenAPI karşılaştırma aracı, Prism | Her commit |
 | Uçtan uca | Kayıt → yorum → analiz → ödül → B2B okuma akışı; sahte LLM ve geliştirme doğrulayıcısıyla | Supertest, Docker Compose | Her birleştirme |

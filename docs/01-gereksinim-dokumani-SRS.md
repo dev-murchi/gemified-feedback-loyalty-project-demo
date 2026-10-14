@@ -305,7 +305,7 @@ Bu soruların ekip önerisi yoktur; yanıtlar hukuki, ticari veya operasyonel ka
 
 ## 11. Gözden Geçirme, İzlenebilirlik ve Onay
 
-v1.3 itibarıyla doküman 51 fonksiyonel (45 zorunlu, 6 ertelenebilir) ve 22 fonksiyonel olmayan gereksinim, 6 user story, 12 ekip önerisi ve 9 açık soru içerir. Ekip önerileri ve açık sorular müşteri doğrulamasıyla kesinleşecektir.
+v1.6 itibarıyla doküman 51 fonksiyonel (45 zorunlu, 6 ertelenebilir) ve 22 fonksiyonel olmayan gereksinim, 6 user story, 21 doğrulanacak ekip önerisi (11.3) ve 9 açık soru (9.3) içerir. Ekip önerileri ve açık sorular müşteri doğrulamasıyla kesinleşecektir.
 
 ### 11.1 İzlenebilirlik Matrisi
 

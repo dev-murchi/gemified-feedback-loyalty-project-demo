@@ -10,7 +10,7 @@ Bu doküman, SDD'deki mimariyi Domain-Driven Design ile kodlanabilir hale getiri
 | --- | --- |
 | Sürüm | 1.2 |
 | Dayandığı dokümanlar | SRS v1.6, SDD v1.3, API sözleşmesi 0.2.7-demo |
-| Değişiklik (1.2) | Context'ler arası okuma: `RawTextSource`, `UnanalyzedReport`, `BranchDirectory`; Insights okuma modelinin yeri; `FeedbackText` kontrol karakterleri. 24 saat kuralı: yorum her durumda `unanalyzed` olarak kapatılır ve kilit açılır; ödül yalnızca uygunsa, bütçe koruması kapalıysa ve son hata sağlayıcıya erişilememesiyse (SRS CR-007) |
+| Değişiklik (1.2) | Context'ler arası okuma: `RawTextSource`, `UnanalyzedReport`, `BranchDirectory`; Insights okuma modelinin yeri; `FeedbackText` kontrol karakterleri; shared kernel içeriği koda göre güncellendi. 24 saat kuralı: yorum her durumda `unanalyzed` olarak kapatılır ve kilit açılır; ödül yalnızca uygunsa, bütçe koruması kapalıysa ve son hata sağlayıcıya erişilememesiyse (SRS CR-007) |
 | Değişiklik (1.1) | Olay tiplerinin yeri: domain/events/, public/ yalnızca yeniden dışa aktarır |
 
 ## 2. Bounded Context'ler
@@ -26,7 +26,7 @@ Sistem altı bounded context'ten ve bilinçli olarak küçük tutulan bir shared
 | **Catalog** | Marka, şube, QR kodu, konu listeleri | Supporting | Referans verisi |
 | **Insights** | B2B istemcileri, markaya yönelik okuma modelleri ve raporlar | Supporting | Diğer context'lerin verisini markaya sunar |
 
-**Shared kernel** yalnızca şunları içerir: tipli kimlikler (`UserId`, `BrandId`, `BranchId`, `FeedbackId`), `Clock` port'u, `DomainEvent` ve `DomainError` temel tipleri, `Result` tipi ve `UnitOfWork` port'u. İş kuralı içeren hiçbir şey shared kernel'e konmaz.
+**Shared kernel** yalnızca şunları içerir: tipli kimlikler (`UserId`, `BrandId`, `BranchId`, `FeedbackId`); `Clock`, `IdGenerator`, `RandomSource`, `Logger` ve `UnitOfWork` port'ları; `AggregateRoot` (iyimser kilit sürümü), `DomainEvent`, `DomainError` ve `ConcurrencyConflictError` temel tipleri; `Result` tipi ve `retryOnConflict`; olay yönlendirme ve outbox kaydı tipleri. Port'ların bellek içi ve sistem uygulamaları `shared-kernel/adapters/` altındadır. İş kuralı içeren hiçbir şey shared kernel'e konmaz.
 
 ## 3. Context Map
 

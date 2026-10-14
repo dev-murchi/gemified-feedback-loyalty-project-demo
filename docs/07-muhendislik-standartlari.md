@@ -20,7 +20,7 @@ Bu doküman, kodun nasıl yazılacağını tanımlar: Clean Architecture katmanl
 | Değişiklik (1.8) | Context'e özgü erişim anahtarları (`*-access.ts`) ve `context-access-only-in-domain-and-outbound` kuralı; olay yönlendirmeleri yalnızca `src/composition/event-routes.ts` dosyasında, kayıttan sonra dondurulur |
 | Değişiklik (1.9) | Loglama shared kernel'deki `Logger` port'u üzerinden; alanlarda kişisel veri yok; testler `RecordingLogger` sahtesiyle |
 | Değişiklik (1.10) | Yayınlanan olay tipleri `domain/events/` içinde tanımlanır, `public/` yalnızca yeniden dışa aktarır; `domain-events-only-shared-kernel` kuralı |
-| Değişiklik (1.13) | OAuth2 token uç noktasının hata biçimi istisnası (RFC 6749); dayanak sürümleri (SRS CR-007) |
+| Değişiklik (1.13) | OAuth2 token uç noktasının hata biçimi istisnası (RFC 6749); Git akışı tek geliştiricili çalışmaya göre; araç listesi tamamlandı; dayanak sürümleri (SRS CR-007) |
 | Değişiklik (1.12) | Benzersizlik kısıtı istisnası ikiye çıktı: `DEVICE_KEYS.key_identifier` kısıtı da adıyla `ConcurrencyConflictError`'a çevrilir (eşzamanlı kayıt, FR-AUTH-02) |
 | Değişiklik (1.11) | Context'ler `src/contexts/` altına taşındı; `src/platform/` ortak altyapı; kural desenleri güncellendi; `platform-imports-no-context` kuralı |
 | Kapsam | `src/` ve `test/` altındaki tüm kod |
@@ -255,10 +255,10 @@ Test seviyeleri ve kritik senaryolar Test Stratejisi'ndedir (`04`). Kod yazarken
 
 ## 10. Git Akışı
 
-- Trunk tabanlı geliştirme: kısa ömürlü dallar (`feat/S0-06-reward-cooldown`), birleştirmede squash.
+- Trunk tabanlı geliştirme: küçük, her biri tek başına çalışan commit'ler doğrudan `main` dalına gider (tek geliştirici). Dal kullanılırsa kısa ömürlüdür (`feat/S0-07-reward-cooldown`) ve squash ile birleştirilir.
 - Commit mesajları Conventional Commits biçimindedir (`feat:`, `fix:`, `refactor:`, `test:`, `docs:`, `chore:`).
 - Her değişiklik bir backlog kalemine bağlıdır (`08-sprint-0-backlog.md`).
-- CI yeşil olmadan birleştirme yapılmaz.
+- Commit'ten önce yerelde `npm run verify` geçer; CI kırmızıya düşerse önce o düzeltilir.
 - Bir tasarım kararını değiştiren kod, ilgili ADR güncellenmeden birleştirilmez.
 
 ## 11. Tamamlanma Tanımı ve Kod İnceleme Listesi
@@ -291,9 +291,11 @@ Test seviyeleri ve kritik senaryolar Test Stratejisi'ndedir (`04`). Kod yazarken
 | Çalışma ortamı | Node.js 22 LTS, npm |
 | Dil | TypeScript |
 | Framework (yalnızca adapter ve composition) | NestJS |
-| Test | Vitest, Testcontainers (PostgreSQL, Redis), Supertest |
+| Test | Vitest, Testcontainers (PostgreSQL, Redis), Supertest, fast-check (özellik tabanlı test), Ajv (uçtan uca testte yanıtların sözleşmeye uyumu) |
 | Statik analiz | ESLint (typescript-eslint), dependency-cruiser, Prettier |
 | HTTP sınırında biçim doğrulaması | Zod (yalnızca inbound adapter'larda) |
+| Erişim token'ı (ES256 JWT) | jose (yalnızca adapter'larda) |
+| TypeScript'i doğrudan çalıştırma (geliştirme) | tsx |
 | API sözleşmesi | Redocly CLI (lint), Prism (mock sunucu) |
 | Kuyruk | BullMQ (ADR-009) |
 
