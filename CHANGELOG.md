@@ -34,6 +34,7 @@ All notable changes to this project are recorded here. The format follows [Keep 
 
 ### Changed
 
+- API contract 0.2.5-demo: `X-Platform-Proof` documents the development-mode proof (ASN.1 DER ES256 over SHA-256(`Idempotency-Key` ‖ raw body bytes), signed with the device key `dk`); the proof binds the body and the key, and a reward needs normal trust plus a valid proof. No field or code changes.
 - `docs/07` v1.12: the unique key-identifier constraint (`device_keys_key_identifier_uq`) joins the ledger key as the second constraint mapped to a concurrency conflict.
 - `CLAUDE.md` working mode: routine technical choices are decided and listed; the owner is asked about money and points, security and personal data, and customer-visible behaviour. `docs/08` S0-10 records the challenge-flooding risk.
 - Bounded contexts moved to `src/contexts/<context>/` (shared kernel, platform and composition stay beside them); every dependency rule rewritten and re-proven; new rule `platform-imports-no-context`. `docs/07` v1.11.

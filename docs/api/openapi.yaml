@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Geri Bildirim ve Sadakat Motoru API
-  version: 0.2.4-demo
+  version: 0.2.5-demo
   description: |
     Demo (Sprint 0) kapsamındaki uç noktaların sözleşmesi. Bu dosya, backend ile Flutter
     ekibi arasındaki anlaşmanın kaynağıdır (SDD ADR-006); uygulamanın ürettiği OpenAPI
@@ -319,6 +319,11 @@ paths:
         eksik veya geçersizse yorum reddedilmez, düşük güven modunda işlenir ve ödül verilmez
         (SRS FR-QR-10). Bu durum yanıttaki `rewardEligible: false` ile bildirilir.
 
+        Kanıt hem gövdeye hem `Idempotency-Key`'e bağlıdır; aynı gövde başka bir anahtarla yeniden
+        gönderilirse kanıt geçersiz sayılır (aynı anahtar ve gövdeyle tekrar, saklanan yanıtı döner).
+        Ödül yalnızca normal güven seviyesi ve geçerli kanıt birlikte varsa verilir
+        (`rewardEligible: true`); kanıt eksik veya geçersizse yorum kabul edilir, ödül verilmez.
+
         **QR:** Uygulama, `https://{alan-adı}/q/{token}` biçimindeki QR bağlantısından token'ı
         çıkarıp `qrToken` alanında gönderir; başka alan adına ait QR'ları kabul etmez (SDD TZ-16).
 
@@ -336,7 +341,17 @@ paths:
         - name: X-Platform-Proof
           in: header
           required: false
-          description: İstek gövdesinin SHA-256 özetine bağlı platform kanıtı (base64)
+          description: >-
+            İstek gövdesinin SHA-256 özetine bağlı platform kanıtı (base64).
+            **Geliştirme modu** (yalnızca geliştirme doğrulayıcısı anlar; üretimde kapalıdır):
+            ASN.1 DER ES256 imzasının standart base64'ü. İmzalayıcıya verilen mesaj,
+            SHA-256(`Idempotency-Key` başlığının UTF-8 baytları ‖ istek gövdesinin alındığı haliyle
+            ham baytları) değerinin 32 baytıdır; imzalayıcı bunu her zamanki gibi bir kez daha
+            hash'ler. `Idempotency-Key` bir UUID'dir (tireler dahil 36 karakter), bu yüzden anahtarla
+            gövde arasında ayırıcı yoktur ve birleşim belirsiz değildir. Gövde JSON olarak
+            ayrıştırılmadan, hiç değiştirilmeden hash'lenir (boşluklar dahil). İmza, oturumdaki cihaz
+            anahtarıyla (token'daki `dk`) atılır. Ham r‖s reddedilir. Geliştirme modunda sayaç
+            kullanılmaz.
           schema:
             type: string
             maxLength: 8192

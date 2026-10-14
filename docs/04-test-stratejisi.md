@@ -9,7 +9,7 @@ Bu doküman, gereksinimlerin (SRS v1.5) ve tasarım kararlarının (SDD v1.2) na
 | Alan | Değer |
 | --- | --- |
 | Sürüm | 1.3 |
-| Dayandığı dokümanlar | SRS v1.5, SDD v1.2, Tehdit Modeli v1.0, API sözleşmesi 0.2.4-demo |
+| Dayandığı dokümanlar | SRS v1.5, SDD v1.2, Tehdit Modeli v1.0, API sözleşmesi 0.2.5-demo |
 | Değişiklik (1.3) | Test aracı Jest yerine Vitest: NestJS 12 yalnızca ESM; Vitest ESM'i doğal olarak destekler |
 
 ## 2. Test Seviyeleri ve Araçlar
