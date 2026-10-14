@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Geri Bildirim ve Sadakat Motoru API
-  version: 0.2.6-demo
+  version: 0.2.7-demo
   description: |
     Demo (Sprint 0) kapsamındaki uç noktaların sözleşmesi. Bu dosya, backend ile Flutter
     ekibi arasındaki anlaşmanın kaynağıdır (SDD ADR-006); uygulamanın ürettiği OpenAPI
@@ -314,7 +314,7 @@ paths:
         oluşturmaz, ilk isteğin yanıtını `Idempotent-Replayed: true` başlığıyla döner. Aynı anahtar
         farklı bir gövdeyle gelirse `422 IDEMPOTENCY_KEY_MISMATCH` döner (SRS FR-AI-10).
 
-        **Platform kanıtı:** `X-Platform-Proof` başlığı, istek gövdesinin SHA-256 özetine bağlı
+        **Platform kanıtı:** `X-Platform-Proof` başlığı, `Idempotency-Key` ile istek gövdesinin birlikte SHA-256 özetine bağlı
         platform kanıtını taşır (iOS: App Attest assertion; Android: Play Integrity token). Başlık
         eksik veya geçersizse yorum reddedilmez, düşük güven modunda işlenir ve ödül verilmez
         (SRS FR-QR-10). Bu durum yanıttaki `rewardEligible: false` ile bildirilir.
@@ -327,7 +327,8 @@ paths:
         **QR:** Uygulama, `https://{alan-adı}/q/{token}` biçimindeki QR bağlantısından token'ı
         çıkarıp `qrToken` alanında gönderir; başka alan adına ait QR'ları kabul etmez (SDD TZ-16).
 
-        **Uzunluk:** Yorum 20–1.000 karakter olmalıdır (Unicode kod noktası, NFC sonrası).
+        **Uzunluk:** Yorum 20–1.000 karakter olmalıdır (Unicode kod noktası; sekme ve satır sonu dışındaki
+        kontrol karakterleri çıkarılıp NFC uygulandıktan sonra).
         Uzunluk ihlali, genel `VALIDATION_ERROR` yerine her zaman `422 TEXT_TOO_SHORT` veya
         `422 TEXT_TOO_LONG` döner.
 
@@ -342,7 +343,7 @@ paths:
           in: header
           required: false
           description: >-
-            İstek gövdesinin SHA-256 özetine bağlı platform kanıtı (base64).
+            `Idempotency-Key` ile istek gövdesinin birlikte SHA-256 özetine bağlı platform kanıtı (base64).
             **Geliştirme modu** (yalnızca geliştirme doğrulayıcısı anlar; üretimde kapalıdır):
             ASN.1 DER ES256 imzasının standart base64'ü. İmzalayıcıya verilen mesaj,
             SHA-256(`Idempotency-Key` başlığının UTF-8 baytları ‖ istek gövdesinin alındığı haliyle
@@ -449,7 +450,8 @@ paths:
       operationId: getFeedback
       summary: Yorumun durumunu, ödülünü ve seviye atlamayı görüntüle
       description: |
-        Yalnızca yorumun sahibine yanıt verir; başka bir kullanıcının yorumu için `404` döner.
+        Yalnızca yorumun sahibine yanıt verir; başka bir kullanıcının yorumu için `404` döner. Biçimi
+        bozuk bir `feedbackId` de bilinmeyen yorum gibi `404` döner.
       security:
         - mobileBearer: []
       parameters:

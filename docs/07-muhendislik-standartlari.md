@@ -8,7 +8,7 @@ Bu doküman, kodun nasıl yazılacağını tanımlar: Clean Architecture katmanl
 
 | Alan | Değer |
 | --- | --- |
-| Sürüm | 1.12 |
+| Sürüm | 1.13 |
 | Dayandığı dokümanlar | SDD v1.3, Alan Modeli v1.2, Test Stratejisi v1.4 |
 | Değişiklik (1.1) | Test aracı Jest yerine Vitest: NestJS 12 yalnızca ESM; Vitest ESM'i doğal olarak destekler; dependency-cruiser'a `shared-kernel-is-pure` kuralı eklendi (shared kernel'i her domain dolaylı olarak içe aktarır) |
 | Değişiklik (1.2) | `shared-kernel/adapters/` (paylaşılan bellek içi UnitOfWork ve sistem saati) ve `test/support/` (FakeClock) eklendi; dependency-cruiser'a `core-does-not-use-shared-adapters` kuralı eklendi |
@@ -20,6 +20,7 @@ Bu doküman, kodun nasıl yazılacağını tanımlar: Clean Architecture katmanl
 | Değişiklik (1.8) | Context'e özgü erişim anahtarları (`*-access.ts`) ve `context-access-only-in-domain-and-outbound` kuralı; olay yönlendirmeleri yalnızca `src/composition/event-routes.ts` dosyasında, kayıttan sonra dondurulur |
 | Değişiklik (1.9) | Loglama shared kernel'deki `Logger` port'u üzerinden; alanlarda kişisel veri yok; testler `RecordingLogger` sahtesiyle |
 | Değişiklik (1.10) | Yayınlanan olay tipleri `domain/events/` içinde tanımlanır, `public/` yalnızca yeniden dışa aktarır; `domain-events-only-shared-kernel` kuralı |
+| Değişiklik (1.13) | OAuth2 token uç noktasının hata biçimi istisnası (RFC 6749); dayanak sürümleri (SRS CR-007) |
 | Değişiklik (1.12) | Benzersizlik kısıtı istisnası ikiye çıktı: `DEVICE_KEYS.key_identifier` kısıtı da adıyla `ConcurrencyConflictError`'a çevrilir (eşzamanlı kayıt, FR-AUTH-02) |
 | Değişiklik (1.11) | Context'ler `src/contexts/` altına taşındı; `src/platform/` ortak altyapı; kural desenleri güncellendi; `platform-imports-no-context` kuralı |
 | Kapsam | `src/` ve `test/` altındaki tüm kod |
@@ -142,6 +143,7 @@ export class SubmitFeedback {
 - Her domain hatasının bir `code` değeri vardır ve bu değerler API sözleşmesindeki hata kataloğuyla birebir aynıdır.
 - Hata kodundan HTTP durumuna eşleme tek bir tabloda, HTTP adapter'ındadır. Bu tablonun sözleşmedeki katalogla aynı olduğu bir testle doğrulanır.
 - Biçim doğrulaması (eksik alan, yanlış tip) inbound adapter'da yapılır ve `VALIDATION_ERROR` döner. Anlam doğrulaması (metin uzunluğu, QR geçerliliği) değer nesnelerinde ve aggregate'lerde yapılır ve kendi kodunu döner.
+- Hatalar Problem Details (RFC 9457) olarak döner. Tek istisna OAuth2 token uç noktasıdır (`POST /v1/b2b/oauth/token`): hataları RFC 6749 biçimindedir (`{ "error": "invalid_client" }`, `application/json`); `X-Request-Id` yine eklenir.
 - `null` bir hatayı ifade etmek için kullanılmaz.
 - Eşzamanlılık çakışması bir domain hatası değildir ve hiçbir `Result` tipinde yer almaz; API hata kataloğu değişmez.
 - Benzersizlik kısıtı ihlalleri altyapı hatasıdır ve fırlatılır. İki istisna vardır ve her ikisi de **adıyla eşleştirilerek** `ConcurrencyConflictError`'a çevrilir: ledger idempotency anahtarının kısıtı (`LEDGER_ENTRIES.idempotency_key`) ve cihaz anahtarı tanımlayıcısının kısıtı (`DEVICE_KEYS.key_identifier`, `device_keys_key_identifier_uq`). Unit of work geri alınır, `retryOnConflict` tekrarlar; ledger için tekrar `ok` döner, kayıtta (`RegisterDevice`) tekrar mevcut kullanıcıyı bulup döner (FR-AUTH-02). Repository, kaydı eklemeden önce sürümü kontrol eder; kısıt yine de tetiklenirse kısıt adı ve anahtarla bir uyarı loglanır. Diğer benzersizlik ihlalleri (ör. QR token, G-3) hiçbir zaman çakışmaya çevrilmez.

@@ -9,8 +9,8 @@ Bu doküman, SDD'deki mimariyi Domain-Driven Design ile kodlanabilir hale getiri
 | Alan | Değer |
 | --- | --- |
 | Sürüm | 1.2 |
-| Dayandığı dokümanlar | SRS v1.6, SDD v1.3, API sözleşmesi 0.2.6-demo |
-| Değişiklik (1.2) | 24 saat kuralı: yorum her durumda `unanalyzed` olarak kapatılır ve kilit açılır; ödül yalnızca uygunsa, bütçe koruması kapalıysa ve son hata sağlayıcıya erişilememesiyse (SRS CR-007) |
+| Dayandığı dokümanlar | SRS v1.6, SDD v1.3, API sözleşmesi 0.2.7-demo |
+| Değişiklik (1.2) | Context'ler arası okuma: `RawTextSource`, `UnanalyzedReport`, `BranchDirectory`; Insights okuma modelinin yeri; `FeedbackText` kontrol karakterleri. 24 saat kuralı: yorum her durumda `unanalyzed` olarak kapatılır ve kilit açılır; ödül yalnızca uygunsa, bütçe koruması kapalıysa ve son hata sağlayıcıya erişilememesiyse (SRS CR-007) |
 | Değişiklik (1.1) | Olay tiplerinin yeri: domain/events/, public/ yalnızca yeniden dışa aktarır |
 
 ## 2. Bounded Context'ler
@@ -46,6 +46,9 @@ flowchart LR
     catalog -->|"OHS: QrResolver"| feedback
     catalog -->|"OHS: LabelSetProvider"| analysis
     feedback -->|"FeedbackSubmitted (outbox, asenkron)"| analysis
+    feedback -->|"OHS: RawTextSource"| analysis
+    analysis -->|"OHS: UnanalyzedReport"| feedback
+    catalog -->|"OHS: BranchDirectory"| feedback
     analysis -->|"FeedbackAnalyzed (senkron)"| feedback
     feedback -->|"FeedbackValidated (senkron)"| gamification
     gamification -->|"OHS: RewardLookup"| feedback
@@ -60,11 +63,14 @@ flowchart LR
 | Catalog → Feedback, Analysis | Open Host Service | Catalog, QR çözümleme ve etiket listesi için kararlı, dar bir arayüz yayınlar (`QrResolver`, `LabelSetProvider`). |
 | Identity → Feedback | Open Host Service | Feedback, isteği yapan kullanıcıyı (`UserId`, `TrustLevel`) ve isteğin platform kanıtının geçerliliğini Identity'den alır (`PlatformProofVerifier`). |
 | Gamification → Feedback | Open Host Service | Yorum durumu sorgusu, kazanılan ödülü ve seviye atlamayı `RewardLookup` üzerinden okur. |
+| Feedback → Analysis | Open Host Service | Analysis, yorumun ham metnini yalnızca Feedback'in yayınladığı `RawTextSource` ile, çözülmüş olarak okur; şifreleme anahtarı Feedback'te kalır. |
+| Analysis → Feedback | Open Host Service | 24 saat kapanışında Feedback, `UnanalyzedReport` ile maskelenmiş metni (yoksa boş) ve ödüle izin verilip verilmediğini (bütçe koruması, son hata türü) Analysis'ten alır (FR-AI-09). |
+| Catalog → Feedback | Open Host Service | Yorum durumu sorgusu şube adını `BranchDirectory` üzerinden okur. |
 | Feedback → Analysis | Domain olayı, asenkron | `FeedbackSubmitted` outbox üzerinden kuyruğa gider (ADR-005). Context'ler arasındaki tek asenkron sınır budur. |
 | Analysis → Feedback → Gamification | Domain olayı, senkron | `FeedbackAnalyzed` ve `FeedbackValidated` aynı unit of work içinde işlenir; analiz sonucu ve ödül tek transaction'dır (ADR-014, ADR-020). |
 | Identity → Gamification | Domain olayı, senkron | `UserRegistered` ile cüzdan, kullanıcıyla aynı transaction'da açılır (FR-AUTH-01). |
 | Analysis → LLM, Identity → Apple/Google | Anti-Corruption Layer | Dış servislerin veri modelleri adapter'da domain tiplerine çevrilir; domain'e sızmaz. |
-| Insights → Feedback, Catalog | Conformist okuma modeli | Raporlama, diğer context'lerin kalıcı verisini salt okunur sorgularla okur (ADR-003'teki bilinçli istisna). Yazma yapmaz; kendi okuma modeli tipleri vardır. |
+| Insights → Feedback, Catalog | Conformist okuma modeli | Raporlama, diğer context'lerin kalıcı verisini salt okunur sorgularla okur (ADR-003'teki bilinçli istisna). Yazma yapmaz; kendi okuma modeli tipleri vardır. Bellek içi `ReportingQueries` adapter'ı composition'da yaşar (diğer context'lerin tablolarını görebilen tek katman); PostgreSQL adapter'ı Insights'ta düz SQL ile okur ve diğer context'lerin kodunu içe aktarmaz (CR-007). |
 
 ## 4. Ortak Dil (Ubiquitous Language)
 
@@ -73,7 +79,7 @@ Kodda yalnızca İngilizce karşılıklar kullanılır ve eş anlamlı kelimeler
 | Türkçe | Kodda | Tanım |
 | --- | --- | --- |
 | Yorum | `Feedback` | Kullanıcının bir şube için QR ile gönderdiği serbest metin geri bildirim |
-| Yorum metni | `FeedbackText` | NFC normalizasyonundan sonra 20–1.000 Unicode kod noktası uzunluğunda metin |
+| Yorum metni | `FeedbackText` | sekme ve satır sonu dışındaki kontrol karakterleri çıkarılıp NFC normalizasyonu uygulandıktan sonra 20–1.000 Unicode kod noktası uzunluğunda metin |
 | Ham metin | `RawText` | Maskelenmemiş, şifreli saklanan yorum metni |
 | Maskelenmiş metin | `MaskedText` | Kişisel verileri yer tutucularla değiştirilmiş metin |
 | Yorum durumu | `FeedbackStatus` | `Analyzing`, `Valid`, `Spam`, `Unanalyzed` |
@@ -133,7 +139,7 @@ Her context için: aggregate'ler ve korudukları kurallar (invariant), değer ne
 | Invariant'lar | QR token'ı en az 128 bit rastgelelikte ve tekildir; iptal edilen QR yeniden etkinleştirilemez, yerine yenisi üretilir (FR-QR-01). Yayınlanmış bir etiket seti değişmez; değişiklik yeni sürümdür. Her etiket setinde `other` konusu bulunur (TZ-12). |
 | Değer nesneleri | `QrToken`, `Sector`, `GeoPoint`, `TopicKey`, `LabelSetVersion` |
 | Yayınlanan olaylar | Yok (MVP) |
-| Open host service | `QrResolver`: token'dan şube, marka ve sektörü çözer; bilinmeyen veya iptal edilmiş token için "yok" döner. `LabelSetProvider`: sektörün güncel etiket setini döner. |
+| Open host service | `QrResolver`: token'dan şube, marka ve sektörü çözer; bilinmeyen veya iptal edilmiş token için "yok" döner. `LabelSetProvider`: sektörün güncel etiket setini döner. `BranchDirectory`: şubenin adını döner. |
 | Use case'ler | `RevokeQrCode` (yönetim); tanımlar MVP'de yönetim script'iyle yapılır (V-4) |
 
 ### 5.3 Feedback
@@ -146,7 +152,8 @@ Her context için: aggregate'ler ve korudukları kurallar (invariant), değer ne
 | Değer nesneleri | `FeedbackText`, `RawText`, `MaskedText`, `IdempotencyKey`, `RequestFingerprint`, `FeedbackStatus`, `RejectionReason` (`FeedbackPending`, `RewardCooldown`, `AttemptsExhausted`; kalan süreyle) |
 | Yayınlanan olaylar | `FeedbackSubmitted` (asenkron), `FeedbackValidated` (senkron) |
 | Dinlenen olaylar | `FeedbackAnalyzed` |
-| Driven port'lar | `FeedbackRepository`, `RewardCooldownRepository`, `RawTextCipher`, `QrResolver`, `PlatformProofVerifier`, `RewardLookup`, `Clock`, `IdGenerator` |
+| Driven port'lar | `FeedbackRepository`, `RewardCooldownRepository`, `RawTextCipher`, `QrResolver`, `BranchDirectory`, `PlatformProofVerifier`, `RewardLookup`, `UnanalyzedReport`, `Clock`, `IdGenerator` |
+| Open host service | `RawTextSource`: Analysis için yorumun çözülmüş ham metni |
 | Use case'ler | `SubmitFeedback`, `GetFeedbackStatus`, `ApplyAnalysisResult` (olay işleyicisi), `FinalizeUnanalyzedFeedback` (24 saat, FR-AI-09: her durumda `unanalyzed` olarak kapatır ve kilidi açar; ödül yalnızca gönderimde uygunsa ve bütçe koruması kapalıysa) |
 
 **RewardCooldown'ın davranışı:**
@@ -167,6 +174,7 @@ Eşzamanlı iki istek aynı satırı yüklerse ikisi de kuralı geçebilir; bunu
 | Domain servisleri | `PreChecks` (AI dışı ön kontroller), `PiiMasker` (SDD 8.6 kuralları), `RetryPolicy` (üstel bekleme, 24 saat sınırı), `BudgetPolicy` (%80 / %100 eşikleri, FR-AI-12) |
 | Değer nesneleri | `MaskedText`, `Sentiment`, `TopicKey`, `SpamReason`, `AnalysisVerdict`, `LlmUsage`, `MicroUsd`, `PromptVersion` |
 | Yayınlanan olaylar | `FeedbackAnalyzed` |
+| Open host service | `UnanalyzedReport`: 24 saatte analiz edilemeyen yorum için maskelenmiş metin (yoksa boş) ve ödüle izin verilip verilmediği |
 | Dinlenen olaylar | `FeedbackSubmitted` (kuyruk üzerinden) |
 | Driven port'lar | `FeedbackAnalysisRepository`, `SentimentAnalyzer` (ACL; OpenAI, Anthropic, Fake), `RawTextSource` (Feedback'in sağladığı çözme yeteneği), `LabelSetProvider`, `LlmSpendLedger`, `JobQueue`, `Clock` |
 | Use case'ler | `ProcessAnalysisJob` |

@@ -9,7 +9,7 @@ Bu doküman, Gereksinim Dokümanı v1.6'daki gereksinimlerin nasıl karşılanac
 | Alan | Değer |
 | --- | --- |
 | Doküman türü | Yazılım Tasarım Dokümanı (SDD) – MVP |
-| Sürüm | 1.3 (15 Ekim 2026: 24 saat kuralı, SRS CR-007; ekip önerisi, müşteri doğrulaması bekliyor). 1.2 (12 Ekim 2026: LEDGER_ENTRIES.xp_total_after; geliştirme sırasında, S0-06). 1.1 (11 Ekim 2026: geliştirme başlangıcı; ADR-019..021, alan modeliyle hizalama). 1.0: tasarım aşaması kapanış sürümü, 10 Ekim 2026 |
+| Sürüm | 1.3 (15 Ekim 2026: SRS CR-007 belirsizlik düzeltmeleri: 24 saat kuralı, silme talebi, platform kanıtının bağlandığı veri, kayıtta ret ve düşük güven ayrımı, kontrol karakterleri; ekip önerisi, müşteri doğrulaması bekliyor). 1.2 (12 Ekim 2026: LEDGER_ENTRIES.xp_total_after; geliştirme sırasında, S0-06). 1.1 (11 Ekim 2026: geliştirme başlangıcı; ADR-019..021, alan modeliyle hizalama). 1.0: tasarım aşaması kapanış sürümü, 10 Ekim 2026 |
 | Dayandığı doküman | Gereksinim Dokümanı (SRS) v1.6 (`01-gereksinim-dokumani-SRS.md`) |
 | İlgili dokümanlar | Tehdit Modeli (`03-tehdit-modeli.md`), Test Stratejisi (`04-test-stratejisi.md`), Alan Modeli (`06-alan-modeli.md`), Mühendislik Standartları (`07-muhendislik-standartlari.md`), Sprint 0 Backlog (`08-sprint-0-backlog.md`) |
 | SDLC aşaması | Geliştirme (Sprint 0) |
@@ -278,6 +278,7 @@ erDiagram
     string sentiment
     uuid topic_id FK
     bool is_valid
+    string spam_reason
     string model
     string prompt_version
     int label_set_version
@@ -289,6 +290,7 @@ erDiagram
     int attempts
     timestamp next_attempt_at
     string last_error
+    string last_error_kind
     int version
   }
   TOPICS {
@@ -340,7 +342,7 @@ erDiagram
 
 **Taşıyıcı kısıtlar ve kurallar**
 
-- `FEEDBACKS (user_id, idempotency_key)` tekil (FR-AI-10); `user_id`, silme talebinden sonra anonimleştirme için boş bırakılabilir (FR-PRIV-02).
+- `FEEDBACKS (user_id, idempotency_key)` tekil (FR-AI-10). Silme talebinde (FR-PRIV-02) `user_id` değiştirilmez: kullanıcı kimliği kişiye dair bilgi taşımayan rastgele bir UUID'dir; cihaz anahtarları ve ham metinler silinince kayıtlar hiçbir kişiye bağlanamaz *(SRS CR-007)*.
 - `LEDGER_ENTRIES.idempotency_key` tekil; değer işlem türünü içerir: `reward:{feedbackId}`, `clawback:{feedbackId}` (FR-GAM-04, FR-GAM-07). Aynı yorum için ödül ve iade ayrı kayıtlardır.
 - `LEDGER_ENTRIES` yalnızca eklenebilir: uygulamanın veritabanı rolüne bu tabloda UPDATE ve DELETE yetkisi verilmez (FR-GAM-03).
 - `LEDGER_ENTRIES.xp_total_after`, kaydın eklendiği andaki toplam XP'dir. Bir yorumun seviye atlaması (FR-GAM-05) bundan türetilir: önceki seviye `xp_total_after − xp_delta`'dan, yeni seviye `xp_total_after`'dan `LevelPolicy` ile hesaplanır. Kayıt değişmediği için sonuç sonradan değişmez.
@@ -350,7 +352,7 @@ erDiagram
 - Duygu, sabit 5 değerli bir enum'dur. Yorum durumu: `analyzing`, `valid`, `spam`, `unanalyzed` (FR-AI-09). Teknik aksaklıkta denemeler 24 saat sürer ve durum bu süre boyunca `analyzing` kalır; deneme sayısı ve son hata worker tarafından ayrıca kaydedilir (FR-AI-05). 24 saatin sonunda yorum her durumda `unanalyzed` olarak kapatılır (6.4). `FEEDBACKS.text_masked` maskeleme yapılamadan kapatılan yorumda NULL'dur; B2B bu durumda metni `null` döner, ham metni asla (SRS FR-B2B-07, CR-007).
 - Seviye toplam XP'den türetilir: L seviyesine ulaşmak için gereken toplam XP = 100 × L × (L − 1) / 2 (FR-GAM-02).
 - Konular sabit bir İngilizce anahtar (`key`, ör. `toilet_cleanliness`) ve Türkçe görünen ad (`name`) taşır; her sektörün listesinde "diğer" (`other`) konusu bulunur. Etiket adı değişse de anahtar sabit kaldığı için geçmiş veriler karşılaştırılabilir kalır (TZ-12).
-- Aggregate kökü tablolarında `version` sütunu iyimser kilit içindir (ADR-019). `FEEDBACKS.request_fingerprint`, aynı Idempotency-Key'in farklı gövdeyle tekrar kullanılmasını yakalar (FR-AI-10). `FEEDBACK_ANALYSES.attempts`, `next_attempt_at` ve `last_error` teknik aksaklıktaki yeniden deneme durumunu tutar (FR-AI-05).
+- Aggregate kökü tablolarında `version` sütunu iyimser kilit içindir (ADR-019). `FEEDBACKS.request_fingerprint`, aynı Idempotency-Key'in farklı gövdeyle tekrar kullanılmasını yakalar (FR-AI-10). `FEEDBACK_ANALYSES.attempts`, `next_attempt_at` ve `last_error` teknik aksaklıktaki yeniden deneme durumunu tutar (FR-AI-05). `last_error_kind` hatanın türüdür (`provider_unavailable` veya `invalid_response`; FR-AI-09). `spam_reason` LLM'in döndürdüğü spam sebebidir; yalnızca kalite izleme içindir, kullanıcıya ve markaya dönmez.
 - Tüm zaman damgaları UTC'dir. B2B tarih aralıkları ve günlük özetler, aksi belirtilmedikçe Europe/Istanbul saatine göre hesaplanır (FR-B2B-10).
 
 **Index'ler**
@@ -440,7 +442,7 @@ Ham metin, maskeleme algoritmasının sonradan iyileştirilebilmesi için saklan
 - **Erişim:** KMS'te çözme yetkisi yalnızca analiz worker'ının ve yeniden maskeleme işinin IAM rolündedir. API ve B2B uçları ham metni çözemez.
 - **Loglar:** Yorum metni (ham veya maskelenmiş) hiçbir loga yazılmaz; log redaction kuralları testle doğrulanır.
 - **Saklama:** `retain_until` dolan ham metinler zamanlanmış bir işle silinir. Maskelenmiş metin ve analizler 2 yıl sonra yorum düzeyinde silinip toplu istatistik olarak kalır (FR-PRIV-03).
-- **Silme talebi:** FR-PRIV-02 akışı, kullanıcının ham metinlerini siler, yorumlarını ve ledger kayıtlarını kullanıcıdan koparır ve cihaz anahtarlarını iptal eder.
+- **Silme talebi:** FR-PRIV-02 akışı, kullanıcının ham metinlerini siler ve cihaz anahtarlarını iptal edip siler; geriye kişisel bilgi taşımayan boş bir kullanıcı kaydı kalır. Yorumlar ve ledger kayıtları değiştirilmez (ledger yalnızca eklenebilir), ama artık hiçbir kişiye bağlanamaz *(SRS CR-007)*.
 
 Nihai KVKK uygunluğu (veri sorumlusu rolü, yurt dışına aktarım dayanağı, açık rıza) müşterinin hukuk danışmanınca belirlenir (SRS S-13).
 
@@ -479,14 +481,16 @@ sequenceDiagram
 | Oturum kanıtı | Nonce üzerinde assertion; sayaç artmalı | Nonce'ın Keystore anahtarıyla imzası |
 | Düşük güven | Doğrulama başarısız, simülatör | Yazılım tabanlı anahtar, bütünlük kararı yetersiz, tanınmayan uygulama |
 
-**Erişim token'ı:** ES256 ile imzalanmış JWT; en fazla 15 dakika; `sub` = kullanıcı, `dk` = cihaz anahtarı, `trust` = güven seviyesi. Uzun ömürlü refresh token yoktur; süre dolunca challenge imzası tekrarlanır. İmza anahtarları Secrets Manager'da tutulur ve döndürülebilir (`kid` başlığı).
+**Ret ve düşük güven ayrımı:** Cihazın anahtara sahip olduğunu gösteren imza (nonce üzerindeki imza) doğrulanamazsa kayıt reddedilir (`401 SIGNATURE_INVALID`). Anahtar sahipliği kanıtlandığı halde platform kararı olumsuzsa (sertifika zinciri, uygulama kimliği, bütünlük kararı) hesap düşük güven modunda açılır. Okunamayan kanıt `400 VALIDATION_ERROR` döner. Güven seviyesi kayıtta belirlenir; MVP'de sonradan yükseltilmez *(SRS CR-007)*.
+
+**Erişim token'ı:** ES256 ile imzalanmış JWT; en fazla 15 dakika; `sub` = kullanıcı, `dk` = cihaz anahtarı, `trust` = güven seviyesi. Uzun ömürlü refresh token yoktur; süre dolunca challenge imzası tekrarlanır. İmza anahtarları Secrets Manager'da tutulur ve döndürülebilir (`kid` başlığı). Anahtar her istekte yeniden kontrol edilmez: iptal edilen anahtarın token'ı süresi dolana kadar (en fazla 15 dakika) kullanılabilir, ama bu sürede gönderilen yorumların platform kanıtı geçersiz sayıldığından ödül kazanılmaz; yeni oturum açılamaz (FR-AUTH-07).
 
 ### 7.2 Ödül Kazandıran İstekte Platform Kanıtı
 
-`POST /v1/feedbacks` isteği, token'a ek olarak istek gövdesinin SHA-256 özetine bağlı bir platform kanıtı taşır (FR-QR-10):
+`POST /v1/feedbacks` isteği, token'a ek olarak `Idempotency-Key` ile istek gövdesinin birlikte SHA-256 özetine (`SHA-256(Idempotency-Key ‖ gövde)`) bağlı bir platform kanıtı taşır (FR-QR-10). Anahtarın da bağlanması, yakalanan bir isteğin yeni bir anahtarla yeniden gönderilmesini önler; geliştirme modu da aynı bağlamayı kullanır *(SRS CR-007)*:
 
-- **iOS:** App Attest assertion; `clientDataHash` = gövde özeti; sunucu imzayı kayıtlı açık anahtarla doğrular ve sayacın arttığını kontrol eder (tekrar saldırısı önlenir).
-- **Android:** Play Integrity standart isteği; `requestHash` = gövde özeti; sunucu kararı çözer, `requestHash`, uygulama tanınırlığı ve cihaz bütünlüğü kararlarını kontrol eder.
+- **iOS:** App Attest assertion; `clientDataHash` = `SHA-256(Idempotency-Key ‖ gövde)`; sunucu imzayı kayıtlı açık anahtarla doğrular ve sayacın arttığını kontrol eder (tekrar saldırısı önlenir).
+- **Android:** Play Integrity standart isteği; `requestHash` = `SHA-256(Idempotency-Key ‖ gövde)`; sunucu kararı çözer, `requestHash`, uygulama tanınırlığı ve cihaz bütünlüğü kararlarını kontrol eder.
 
 Kanıt eksik veya geçersizse yorum reddedilmez, düşük güven modunda işlenir: markanın verisine katkı sağlar, ödül verilmez. Play Integrity'nin günlük bir istek kotası vardır; 12 aylık hedefte kota artışı gerekecektir (SRS S-17, güncel kota Google dokümanından teyit edilmeli).
 
@@ -512,7 +516,7 @@ Hız sınırları doğrulanmış cihaz anahtarına bağlıdır ve Redis'te GCRA 
 ### 7.5 Uygulama Güvenliği
 
 - OWASP ASVS Seviye 2 hedeflenir (NFR-SEC-05).
-- Tüm girdiler şema ile doğrulanır; istek gövdesi en fazla 8 KB, yorum 20–1.000 karakter; Unicode normalizasyonu ve kontrol karakterlerinin temizlenmesi uygulanır.
+- Tüm girdiler şema ile doğrulanır; istek gövdesi en fazla 8 KB, yorum 20–1.000 karakter. Yorum metninden sekme ve satır sonu (`\t`, `\n`, `\r`) dışındaki Unicode kontrol karakterleri çıkarılır, ardından NFC normalizasyonu uygulanır; uzunluk bu metin üzerinden kod noktası olarak sayılır *(SRS CR-007)*.
 - `GET /v1/feedbacks/{id}` yalnızca yorumun sahibine yanıt verir; başkasının yorumu için 404 (yetkisiz nesne erişimi önlenir).
 - ALB önünde AWS WAF (yönetilen kural setleri).
 - Gizli anahtarlar Secrets Manager'da; uygulama IAM rolleriyle erişir; uzun ömürlü erişim anahtarı yoktur (NFR-SEC-06).

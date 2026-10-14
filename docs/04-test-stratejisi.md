@@ -9,8 +9,8 @@ Bu doküman, gereksinimlerin (SRS v1.6) ve tasarım kararlarının (SDD v1.3) na
 | Alan | Değer |
 | --- | --- |
 | Sürüm | 1.4 |
-| Dayandığı dokümanlar | SRS v1.6, SDD v1.3, Tehdit Modeli v1.1, API sözleşmesi 0.2.6-demo |
-| Değişiklik (1.4) | TC-AI-04 ve TC-AI-05: 24 saatte analiz edilemeyen yorum her durumda kapatılır; ödül yalnızca uygunsa ve bütçe koruması kapalıysa. TC-AI-11: şemaya aykırı yanıt nedeniyle analiz edilemeyen yorum ödülsüz kapatılır (SRS CR-007) |
+| Dayandığı dokümanlar | SRS v1.6, SDD v1.3, Tehdit Modeli v1.1, API sözleşmesi 0.2.7-demo |
+| Değişiklik (1.4) | TC-AI-04 ve TC-AI-05: 24 saatte analiz edilemeyen yorum her durumda kapatılır; ödül yalnızca uygunsa ve bütçe koruması kapalıysa. TC-AI-11: şemaya aykırı yanıt nedeniyle analiz edilemeyen yorum ödülsüz kapatılır (SRS CR-007). TC-AUTH-04: imza geçersizse ret, platform kararı olumsuzsa düşük güven. US-06: silmede ledger değişmez (SRS CR-007) |
 | Değişiklik (1.3) | Test aracı Jest yerine Vitest: NestJS 12 yalnızca ESM; Vitest ESM'i doğal olarak destekler |
 
 ## 2. Test Seviyeleri ve Araçlar
@@ -65,7 +65,7 @@ Test piramidi gözetilir: kuralların büyük kısmı hızlı birim testleriyle,
 | TC-AUTH-01 | Geçerli attestation ile kayıt | Kullanıcı, cüzdan, normal güven | FR-AUTH-01 |
 | TC-AUTH-02 | Aynı nonce ile ikinci kayıt | Reddedilir | Tehdit T-S4 |
 | TC-AUTH-03 | Süresi dolmuş nonce | Reddedilir | SDD 7.1 |
-| TC-AUTH-04 | Başarısız attestation (geçersiz zincir, yanlış uygulama kimliği) | Düşük güven modunda hesap | FR-AUTH-06 |
+| TC-AUTH-04 | Anahtar imzası geçerli ama platform kararı olumsuz (geçersiz zincir, yanlış uygulama kimliği, yetersiz bütünlük); ayrıca imzası geçersiz kayıt | Platform kararı olumsuzsa düşük güven modunda hesap; imza geçersizse `401 SIGNATURE_INVALID` | FR-AUTH-06 |
 | TC-AUTH-05 | iOS'ta sayacı artmayan assertion | Reddedilir | Tehdit T-S4 |
 | TC-AUTH-06 | İptal edilmiş anahtarla oturum | Reddedilir | FR-AUTH-07 |
 | TC-AUTH-07 | Gövdesi değiştirilmiş yorum isteği (kanıt eski gövdeye ait) | Düşük güven; ödül yok | FR-QR-10 |
@@ -144,7 +144,7 @@ Her user story'nin kabul kriterleri (SRS Bölüm 6) staging ortamında uçtan uc
 | US-03 Seviye atlama | TC-GAM-01, 05 |
 | US-04 Otomatik analiz | TC-AI-02..06, AI değerlendirme kapısı |
 | US-05 Şube bazlı içgörü | TC-B2B-01..06 |
-| US-06 Verilerimi silme | Silme talebi sonrası ham metnin silindiği, yorum ve ledger'ın anonimleştiği, anahtarın iptal edildiği uçtan uca test |
+| US-06 Verilerimi silme | Silme talebi sonrası ham metinlerin silindiği, cihaz anahtarlarının iptal edilip silindiği, yorum ve ledger kayıtlarının değişmeden kaldığı ve kişiye bağlanamadığı uçtan uca test |
 
 ## 7. CI Kapıları ve Tamamlanma Tanımı
 

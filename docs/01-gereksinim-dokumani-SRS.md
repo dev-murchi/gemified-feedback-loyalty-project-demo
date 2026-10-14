@@ -95,7 +95,7 @@ Kimlik, istemcinin beyan ettiği bir cihaz kimliğine değil, cihazın güvenli 
 | FR-QR-07 | Bir kullanıcı aynı şubede, bir önceki ödüllü yorumunun gönderim zamanından itibaren 24 saat geçmeden yeniden ödül kazanamaz. Ödül hakkı yalnızca fiilen ödül verilen yorumla tüketilir; geçerli sayıldığı halde ödül almayan yorum (düşük güven, geçersiz platform kanıtı, FR-AI-09 gereği ödülsüz kapatılan yorum) ödül hakkını tüketmez *(Ekip önerisi; müşteri doğrulaması bekliyor, CR-007)*. Bir yorum incelenirken aynı şubeye yeni yorum gönderilemez. Süre yapılandırılabilir olmalıdır. | M |
 | FR-QR-08 | QR doğrulama mantığı, sonraki fazdaki imzalı, süreli ve tek kullanımlık dinamik QR'ı destekleyecek şekilde genişletilebilir olmalıdır. | S |
 | FR-QR-09 | Bir kullanıcı aynı şubede herhangi bir 24 saatlik aralıkta en fazla 3 yorum gönderebilir; spam sayılan yorum ödül hakkını tüketmez ama deneme hakkını tüketir. Deneme sayısı yapılandırılabilir olmalıdır. Deneme, kabul edilen her yorum gönderimidir (düşük güvenli olanlar dahil); reddedilen istek (geçersiz QR veya metin, bekleme süresi, deneme sınırı) deneme sayılmaz. | M |
-| FR-QR-10 | Ödül kazandırabilecek yorum gönderimi, istek gövdesinin özetine bağlanmış bir platform kanıtı (iOS: App Attest assertion; Android: Play Integrity token) taşımalıdır. Kanıtı eksik veya geçersiz istek düşük güven modunda işlenir. | M |
+| FR-QR-10 | Ödül kazandırabilecek yorum gönderimi, Idempotency-Key ile istek gövdesinin birlikte özetine bağlanmış bir platform kanıtı (iOS: App Attest assertion; Android: Play Integrity token) taşımalıdır. Kanıtı eksik veya geçersiz istek düşük güven modunda işlenir. | M |
 
 ### 5.3 Yapay Zeka (NLP) Köprüsü
 
@@ -147,7 +147,7 @@ Kimlik, istemcinin beyan ettiği bir cihaz kimliğine değil, cihazın güvenli 
 | ID | Gereksinim | Öncelik |
 | --- | --- | --- |
 | FR-PRIV-01 | Uygulama ilk açılışta aydınlatma metnini göstermeli ve hukuki değerlendirme gerektiriyorsa açık rıza almalıdır. Metin ve rızanın gerekip gerekmediği müşterinin hukuk danışmanınca belirlenir (S-13). | M |
-| FR-PRIV-02 | Kullanıcı uygulama içinden verilerinin silinmesini talep edebilmelidir. Talep, cihaz anahtarıyla doğrulanır; ham metin silinir, yorumlar ve ledger kayıtları kullanıcıyla bağı koparılarak anonimleştirilir. | M |
+| FR-PRIV-02 | Kullanıcı uygulama içinden verilerinin silinmesini talep edebilmelidir. Talep, cihaz anahtarıyla doğrulanır; ham metinler silinir, kullanıcının cihaz anahtarları iptal edilip silinir. Kullanıcı kimliği kişiyle ilişkisi olmayan rastgele bir tanımlayıcı olduğundan, kişiye bağlanamayan yorum ve ledger kayıtları değiştirilmeden kalır (ledger yalnızca eklenebilir, FR-GAM-03). *(Ekip önerisi; müşteri doğrulaması bekliyor, CR-007.)* | M |
 | FR-PRIV-03 | Ham metin 2 yıl saklanıp silinmelidir. Maskelenmiş metin ve analiz sonuçları 2 yılın sonunda yorum düzeyinde silinip yalnızca toplu istatistik olarak tutulmalıdır (ekip önerisi; S-14). | M |
 
 ## 6. User Story'ler ve Kabul Kriterleri
@@ -200,7 +200,7 @@ Bir marka yöneticisi olarak, kendi şubelerimdeki şikayetleri ve özetleri ken
 **US-06 – Verilerimi silme**
 Bir müşteri olarak, uygulama içinden verilerimin silinmesini isteyebilmek istiyorum.
 
-- Verilen: kullanıcı silme talebinde bulunur ve cihaz anahtarıyla doğrulanır. O zaman: ham metinleri silinir, yorumları ve ledger kayıtları kendisiyle bağı koparılarak anonimleştirilir, cihaz anahtarı iptal edilir.
+- Verilen: kullanıcı silme talebinde bulunur ve cihaz anahtarıyla doğrulanır. O zaman: ham metinleri silinir, cihaz anahtarları iptal edilip silinir; yorumları ve ledger kayıtları değişmeden kalır ama artık hiçbir kişiye bağlanamaz (CR-007).
 
 ## 7. Fonksiyonel Olmayan Gereksinimler
 
@@ -361,6 +361,7 @@ Demo sunumunda "biz şöyle önerdik, doğru mu?" kalıbıyla sorulacak ekip ön
 18. Aylık LLM bütçesinin tutarı (S-7, önerilen 300 USD) ve bütçe uyarılarının kime gideceği; ekip önerisi: platform yöneticisi, UTC takvim ayı (FR-AI-12, S-15; CR-007).
 19. Ödül hakkı yalnızca fiilen ödül verilen yorumla tüketilir; ödülsüz geçerli yorum kullanıcının o şubedeki ödül hakkını tüketmez (FR-QR-07; CR-007).
 20. Puanın kazanım tarihi, yorumun gönderim zamanıdır; puan son kullanma politikası için önemlidir (FR-GAM-08, S-16; CR-007).
+21. Silme talebinde ham metinler ve cihaz anahtarları silinir; yorumlar ve puan hareketleri silinmez, ama artık hiçbir kişiye bağlanamaz (FR-PRIV-02; KVKK değerlendirmesi S-13; CR-007).
 
 ### 11.4 Değişiklik Yönetimi
 
@@ -484,8 +485,8 @@ v1.0 baseline'dan sonra her değişiklik bir değişiklik talebiyle yapılır:
 | Alan | Değer |
 | --- | --- |
 | Kaynak | Geliştirme aşaması (S0-07 öncesi), tüm dokümanların ve kodun belirsizlik taraması; kararlar proje tanım metnine (`00-musteri-proje-metni.md`) dayandırıldı |
-| Durum | Ekip önerisi; müşteri doğrulaması bekliyor (11.3, madde 9 ve 15–20) |
-| Değişen gereksinimler | FR-QR-07, FR-QR-09, FR-AI-09, FR-AI-12, FR-GAM-06, FR-B2B-07, S-12, 11.3 madde 9 ve 15–20 |
+| Durum | Ekip önerisi; müşteri doğrulaması bekliyor (11.3, madde 9 ve 15–21) |
+| Değişen gereksinimler | FR-QR-07, FR-QR-09, FR-QR-10, FR-PRIV-02, US-06, FR-AI-09, FR-AI-12, FR-GAM-06, FR-B2B-07, S-12, 11.3 madde 9 ve 15–21 |
 
 **Gerekçe:**
 
@@ -497,3 +498,5 @@ v1.0 baseline'dan sonra her değişiklik bir değişiklik talebiyle yapılır:
 6. **Ödül hakkının tüketilmesi.** "Geçerli sayılan yorumla tüketilir" ifadesi, ödül almayan geçerli yorumda (düşük güven, kanıtsız, ödülsüz kapatılan) hakkın yanıp yanmadığını belirsiz bırakıyordu. Metin XP'yi geçerli yoruma bağlar; ödül verilmediyse hak tüketilmez.
 7. **Deneme tanımı ve terimler.** Deneme kabul edilen gönderimdir; reddedilen istek deneme değildir. FR-GAM-06'daki "geçersiz", API'deki `spam` ve `unanalyzed` durumlarıyla eşlendi.
 8. **Bütçe uyarıları.** "Yönetici" platform yöneticisidir; ay, sağlayıcının faturasıyla uyumlu olması için UTC takvim ayıdır. Tutar müşteri kararıdır.
+9. **Silme talebi yalnızca eklenebilir ledger ile çelişiyordu.** FR-PRIV-02 yorumların ve ledger kayıtlarının "kullanıcıyla bağı koparılarak" anonimleştirilmesini istiyordu; bu, değiştirilemez ledger kaydının güncellenmesi demekti (FR-GAM-03, Tehdit Modeli T-T3). Kullanıcı kimliği zaten kişiye dair bilgi taşımayan rastgele bir tanımlayıcıdır; kişiyle tek bağ cihaz anahtarı ve ham metindir. Bunlar silinince kayıtlar kişiye bağlanamaz ve değiştirilmeleri gerekmez. Hukuki yeterliliği KVKK değerlendirmesine bağlıdır (S-13).
+10. **Platform kanıtının bağlandığı veri.** Kanıt yalnızca gövdeye bağlıyken, yakalanan bir istek yeni bir Idempotency-Key ile yeniden gönderilip ikinci bir yorum olarak kabul edilebilirdi. Kanıt artık Idempotency-Key ile gövdenin birlikte özetine bağlıdır (geliştirme modu da aynısını kullanır).

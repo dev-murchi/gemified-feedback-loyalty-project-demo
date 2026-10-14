@@ -13,7 +13,7 @@ Bu doküman, sistemin güvenlik kararlarının hangi tehditlere karşı alındı
 | Kapsam dışı | Flutter uygulamasının iç güvenliği (mobil ekibin sorumluluğu), AWS'nin kendi altyapı güvenliği |
 | Dayandığı dokümanlar | SRS v1.6, SDD v1.3 |
 | Gözden geçirme | Her mimari değişiklikte ve en az üç ayda bir |
-| Değişiklik (1.1) | T-T6: 24 saat kuralının şemaya aykırı LLM yanıtıyla kötüye kullanılması (SRS CR-007) |
+| Değişiklik (1.1) | T-T6: 24 saat kuralının şemaya aykırı LLM yanıtıyla kötüye kullanılması; T-D4: güven seviyesi MVP'de sonradan yükseltilmez (SRS CR-007) |
 
 ## 2. Korunan Varlıklar
 
@@ -117,7 +117,7 @@ Risk = olasılık × etki (Y = yüksek, O = orta, D = düşük); önlemlerden **
 | T-D1 | Uzun metinlerle LLM bütçesinin tüketilmesi | 1.000 karakter ve 8 KB sınırı; ön kontroller; deneme sınırı; bütçe koruması | D | FR-AI-01, FR-AI-12 |
 | T-D2 | API'nin istek yağmuruna tutulması | WAF; kimliğe bağlı hız sınırı; otomatik ölçekleme | O: büyük dağıtık saldırılarda ek koruma (AWS Shield Advanced) gerekebilir | FR-QR-06, SDD 9.1 |
 | T-D3 | Kuyruğun doldurulması | Yalnızca kabul edilen yorumlar kuyruğa girer; kabul kuralları kimliğe bağlı | D | SDD 6.4 |
-| T-D4 | Apple/Google doğrulama servislerinin kesintisi | Doğrulanamayan kayıt reddedilmez, düşük güven modunda açılır; servis döndüğünde yeniden doğrulama | O: kesinti süresince yeni kullanıcılar ödül kazanamaz | FR-AUTH-06 |
+| T-D4 | Apple/Google doğrulama servislerinin kesintisi | Doğrulanamayan kayıt reddedilmez, düşük güven modunda açılır | O: kesinti süresince kayıt olan kullanıcılar düşük güvende kalır ve ödül kazanamaz; MVP'de güven seviyesi sonradan yükseltilmez, yeniden doğrulama sonraki fazdadır (SRS CR-007) | FR-AUTH-06 |
 | T-D5 | LLM sağlayıcısının kesintisi | Yeniden deneme, devre kesici; yorum kaybolmaz; 24 saat kuralı | D | FR-AI-05, FR-AI-09 |
 | T-D6 | Gerçek kullanıcıların ortak IP nedeniyle engellenmesi | Hız sınırı IP'ye değil kimliğe bağlı; WAF IP kuralları yalnızca geniş eşikli | D | FR-QR-06 |
 
