@@ -9,7 +9,7 @@ Bu doküman, kodun nasıl yazılacağını tanımlar: Clean Architecture katmanl
 | Alan | Değer |
 | --- | --- |
 | Sürüm | 1.12 |
-| Dayandığı dokümanlar | SDD v1.2, Alan Modeli v1.1, Test Stratejisi v1.3 |
+| Dayandığı dokümanlar | SDD v1.3, Alan Modeli v1.2, Test Stratejisi v1.4 |
 | Değişiklik (1.1) | Test aracı Jest yerine Vitest: NestJS 12 yalnızca ESM; Vitest ESM'i doğal olarak destekler; dependency-cruiser'a `shared-kernel-is-pure` kuralı eklendi (shared kernel'i her domain dolaylı olarak içe aktarır) |
 | Değişiklik (1.2) | `shared-kernel/adapters/` (paylaşılan bellek içi UnitOfWork ve sistem saati) ve `test/support/` (FakeClock) eklendi; dependency-cruiser'a `core-does-not-use-shared-adapters` kuralı eklendi |
 | Değişiklik (1.3) | Olay erişim anahtarı (`takeEvents`, `src/shared-kernel/repository-access.ts`) ve `repository-access-only-in-outbound-adapters` kuralı; `InMemoryTable` satırları kopyalar; save sonrası sürüm kuralı (markSaved; uygulama S0-04) |

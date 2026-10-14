@@ -109,10 +109,10 @@ Kimlik, istemcinin beyan ettiği bir cihaz kimliğine değil, cihazın güvenli 
 | FR-AI-06 | LLM sağlayıcısı (OpenAI, Gemini vb.), iş mantığı değişmeden değiştirilebilir olmalıdır. | M |
 | FR-AI-07 | Yorum metni LLM'e gönderilmeden önce telefon, e-posta, plaka ve T.C. kimlik numarası gibi kişisel veriler maskelenmelidir. İsimlerin desen tabanlı maskelenmesinin sınırlı olduğu bilinen bir kısıttır (SDD TZ-8). | M |
 | FR-AI-08 | LLM, metnin anlamlı bir geri bildirim olup olmadığını (geçerli / spam) da döndürmelidir. | M |
-| FR-AI-09 | Teknik bir aksaklık nedeniyle 24 saat içinde analiz edilemeyen yorum, AI dışı ön kontrollerden geçmişse ve hesap normal güven modundaysa geçerli sayılıp ödüllendirilmeli; B2B yanıtlarında "analiz edilemedi" durumuyla yer almalıdır. Bütçe koruması (FR-AI-12) devredeyken bu otomatik onay uygulanmaz. | M |
+| FR-AI-09 | Teknik bir aksaklık nedeniyle 24 saat içinde analiz edilemeyen yorum "analiz edilemedi" olarak kapatılır ve kullanıcının o şubedeki bekleyen yorum kilidi açılır; yorum B2B yanıtlarında "analiz edilemedi" durumuyla yer alır. Yorum, gönderim anında ödüle uygunsa (normal güven ve geçerli platform kanıtı, FR-QR-10) ve bütçe koruması (FR-AI-12) devrede değilse ödüllendirilir; aksi halde ödülsüz kapatılır. AI dışı ön kontrolden geçemeyen yorum spam sayıldığı için bu aşamaya gelmez. *(Ekip önerisi; müşteri doğrulaması bekliyor, CR-007.)* | M |
 | FR-AI-10 | Yorum gönderimi idempotent olmalıdır: istemci her yorum için bir Idempotency-Key gönderir; aynı anahtarla tekrar gelen istek yeni yorum oluşturmaz, ilk isteğin sonucunu döner. | M |
 | FR-AI-11 | Her analiz; kullanılan model, prompt sürümü ve etiket listesi sürümüyle birlikte kaydedilmelidir. Prompt veya model değişikliği, değerlendirme setinde kalite hedeflerini (NFR-AIQ-01) karşılamadan yayına alınamaz. | M |
-| FR-AI-12 | Aylık LLM harcaması izlenmelidir. Bütçenin %80'inde yöneticiye uyarı gider; %100'ünde yeni analizler kuyrukta bekletilir ve alarm üretilir. | M |
+| FR-AI-12 | Aylık LLM harcaması izlenmelidir. Bütçenin %80'inde yöneticiye uyarı gider; %100'ünde yeni analizler kuyrukta bekletilir ve alarm üretilir. Bütçe koruması devredeyken 24 saati dolan bekleyen yorumlar FR-AI-09 uyarınca ödülsüz kapatılır; kullanıcı o şubede yeni yorum gönderebilir. *(Ekip önerisi; müşteri doğrulaması bekliyor, CR-007.)* | M |
 
 ### 5.4 Oyunlaştırma (Gamification) Motoru
 
@@ -270,7 +270,7 @@ Aşağıdaki öneriler ekibin orijinal metne dayanarak hazırladığı yanıtlar
 | Soru | Ekip önerisi | Etkilenen gereksinimler |
 | --- | --- | --- |
 | S-11 Sahte cihaz ve hesap riski | Kimlik, platform tarafından doğrulanmış cihaz anahtarına dayanır (CR-003); doğrulanamayan cihazlar düşük güven modunda ödül kazanamaz. Telefon doğrulaması sonraki fazdadır. | FR-AUTH-01..08 |
-| S-12 AI başarısızlığı | Kullanıcı teknik hatamız yüzünden ödülünü kaybetmemelidir: 24 saat içinde analiz edilemeyen yorum, ön kontrollerden geçmişse geçerli sayılır. | FR-AI-09 |
+| S-12 AI başarısızlığı | Kullanıcı teknik hatamız yüzünden ödülünü kaybetmemeli ve kilitli kalmamalıdır: 24 saat içinde analiz edilemeyen yorum her durumda kapatılır; gönderimde ödüle uygunsa ve bütçe koruması devrede değilse ödüllendirilir (CR-007). | FR-AI-09 |
 
 ### 9.3 Müşterinin Yanıtlaması Gereken Açık Sorular
 
@@ -355,6 +355,7 @@ Demo sunumunda "biz şöyle önerdik, doğru mu?" kalıbıyla sorulacak ekip ön
 12. Seviye formülü: XP seviye atlayınca sıfırlanmaz; seviye 2 için 100, seviye 3 için 300 toplam XP (FR-GAM-02).
 13. B2B tarih aralıkları ve günlük özetler İstanbul saatine göre (FR-B2B-10).
 14. LLM sağlayıcısı OpenAI veya Anthropic olabilir; yurt dışı aktarım (KVKK) değerlendirmesi seçilen sağlayıcıyı kapsamalıdır (S-7, CR-006).
+15. 24 saat içinde analiz edilemeyen yorum her durumda "analiz edilemedi" olarak kapatılır ve kullanıcının o şubedeki kilidi açılır; ödül yalnızca yorum gönderimde ödüle uygunsa (normal güven ve geçerli platform kanıtı) ve bütçe koruması devrede değilse verilir (FR-AI-09, FR-AI-12; CR-007).
 
 ### 11.4 Değişiklik Yönetimi
 
@@ -478,9 +479,10 @@ v1.0 baseline'dan sonra her değişiklik bir değişiklik talebiyle yapılır:
 | Alan | Değer |
 | --- | --- |
 | Kaynak | Geliştirme aşaması (S0-07 öncesi), tüm dokümanların ve kodun belirsizlik taraması; kararlar proje tanım metnine (`00-musteri-proje-metni.md`) dayandırıldı |
-| Durum | Ekip önerisi; müşteri doğrulaması bekliyor (11.3, madde 9) |
-| Değişen gereksinimler | 11.3 madde 9 |
+| Durum | Ekip önerisi; müşteri doğrulaması bekliyor (11.3, madde 9 ve 15) |
+| Değişen gereksinimler | FR-AI-09, FR-AI-12, S-12, 11.3 madde 9 ve 15 |
 
 **Gerekçe:**
 
 1. **İsim maskeleme vaadi tasarımla çelişiyordu.** 11.3 madde 9 ve CR-002, çalışan isimlerinin markaya iletilmeyeceğini söylüyordu; oysa FR-AI-07, SDD TZ-8 ve 8.6, isimlerin MVP'de maskelenmediğini (desen tabanlı maskeleme isimleri yakalayamaz) ve Tehdit Modeli T-I5 bunun kabul edilen bir kalan risk olduğunu belirtir. Müşteriye yapılmayan bir şey vaat edilmemesi için madde 9 düzeltildi: desenle yakalanan kişisel veriler maskelenir, isimler maskelenmez. Metindeki "temiz veri" beklentisi isim maskelemenin sonraki fazda eklenmesini gerektirir; ham metin şifreli saklandığı için eski yorumlar o zaman yeniden maskelenebilir.
+2. **24 saat kuralı kullanıcıyı kilitleyebiliyordu.** FR-AI-09 bütçe koruması devredeyken otomatik onayı uygulamıyor, FR-AI-12 yeni analizleri kuyrukta bekletiyordu; 24 saati dolan yorum "bekleyen yorum" olarak kalıyor ve kullanıcı o şubeye bütçe sıfırlanana kadar yeni yorum gönderemiyordu. Düşük güvenli yorumun 24 saatte ne olacağı da tanımsızdı ve ödül koşulu yalnızca "normal güven" diyordu; oysa ödül, gönderimdeki platform kanıtına da bağlıdır (FR-QR-10). Metin, XP'nin "her geçerli yorumla" verileceğini söyler ve geçerliliğe yapay zeka karar verir; analiz edilemeyen yorumun ödülü bu yüzden bir ekip önerisidir (S-12). Karar: yorum 24 saatte her durumda kapatılır ve kilit açılır; ödül yalnızca yorum gönderimde ödüle uygunsa ve bütçe koruması devrede değilse verilir. Ön kontrol koşulu kaldırıldı, çünkü ön kontrolden geçemeyen yorum zaten spam sonucu alır.

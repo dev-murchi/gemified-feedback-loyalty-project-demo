@@ -30,7 +30,7 @@ These rules were set after real friction in the planning chat. Follow them.
 | Phase | State |
 | --- | --- |
 | Requirements | Closed – SRS v1.5 (customer validation pending at demo); v1.6 on 15 Oct 2026 (CR-007, ambiguity review) |
-| Design | Closed 10 Oct 2026; SDD v1.1 aligned on 11 Oct; v1.2 on 12 Oct (`xp_total_after`, S0-06) |
+| Design | Closed 10 Oct 2026; SDD v1.1 aligned on 11 Oct; v1.2 on 12 Oct (`xp_total_after`, S0-06); v1.3 on 15 Oct (24-hour rule, CR-007) |
 | **Development** | **Sprint 0 restarted from scratch on 11 Oct 2026. S0-01 done 11 Oct 2026 (CI green, reviewed). S0-02 done 11 Oct 2026 (CI green, reviewed; contract 0.2.1-demo). S0-03 done 11 Oct 2026 (CI green, reviewed; review fixes: `takeEvents` key, `InMemoryTable` copies). S0-04 done 11 Oct 2026 (CI green, reviewed; review fixes: conflicts thrown and rolled back, `docs/07` v1.6). S0-06 done 12 Oct 2026 (CI green, reviewed; done before S0-05, owner decision: every user has a wallet from the moment they exist). S0-05 done 13 Oct 2026 (CI green, reviewed; contract 0.2.4-demo, `docs/07` v1.12). Next: S0-07 (contract 0.2.5-demo: platform proof on feedback submission).** |
 
 A first Sprint 0 attempt existed; its code and the git history were removed on purpose on 11 Oct 2026. Do not recreate it.
@@ -40,10 +40,10 @@ A first Sprint 0 attempt existed; its code and the git history were removed on p
 | File | Use it for |
 | --- | --- |
 | `docs/01-gereksinim-dokumani-SRS.md` (v1.6) | Requirements IDs (FR-*, NFR-*, US-*), open questions (§9), customer validation list (§11.3), change requests CR-001..007 |
-| `docs/02-yazilim-tasarim-dokumani-SDD.md` (v1.2) | Architecture, ADR-001..021, ERD (§6.1), aggregates/transactions (§6.2), DB guarantees G-1..G-4 (§6.3), reward rules (§6.4), security (§7), AI design (§8), demo scope (§11.1) |
+| `docs/02-yazilim-tasarim-dokumani-SDD.md` (v1.3) | Architecture, ADR-001..021, ERD (§6.1), aggregates/transactions (§6.2), DB guarantees G-1..G-4 (§6.3), reward rules (§6.4), security (§7), AI design (§8), demo scope (§11.1) |
 | `docs/03-tehdit-modeli.md` | STRIDE threats and mitigations |
-| `docs/04-test-stratejisi.md` (v1.3) | Test levels, critical scenarios, demo test subset (§8) |
-| `docs/06-alan-modeli.md` (v1.1) | **DDD model:** bounded contexts, context map, ubiquitous language (TR↔EN), aggregates, invariants, events, ports, use cases, transaction boundaries |
+| `docs/04-test-stratejisi.md` (v1.4) | Test levels, critical scenarios, demo test subset (§8) |
+| `docs/06-alan-modeli.md` (v1.2) | **DDD model:** bounded contexts, context map, ubiquitous language (TR↔EN), aggregates, invariants, events, ports, use cases, transaction boundaries |
 | `docs/07-muhendislik-standartlari.md` (v1.12) | **Coding rules:** layers, folder layout, DDD rules, use-case pattern, error handling, quality gates, ESLint + dependency-cruiser config, tests, DoD |
 | `docs/08-sprint-0-backlog.md` | **Work order:** S0-01..S0-15 with done criteria and cut line |
 | `docs/api/openapi.yaml` (0.2.5-demo) | API contract: 12 endpoints, RFC 9457 errors, 17 error codes. Code must match it exactly |
@@ -62,7 +62,7 @@ A first Sprint 0 attempt existed; its code and the git history were removed on p
 - **Reward rules (`RewardCooldown` aggregate, per user + branch):** one pending feedback at a time; 24 h since the *submission time* of the last rewarded feedback; ≤ 3 attempts in any 24 h (sliding log, not fixed window). Methods: `reserve(feedbackId, now)`, `complete(feedbackId, outcome, submittedAt)`. Spam does not refund the attempt.
 - **Rate limiting:** GCRA in Redis keyed on verified identity; pre-auth endpoints use broad IP limits only (CGNAT).
 - **Idempotency:** `Idempotency-Key` + request fingerprint; same key with a different body is rejected.
-- **LLM (Analysis = anti-corruption layer):** `SentimentAnalyzer` port; OpenAI adapter is Must, Anthropic is Should (`LLM_DRIVER`); model chosen by measurement on an eval set (~50 per sector for demo) (ADR-018, open). Output JSON `{sentiment, topicKey, isValid, spamReason}`; sentiment is a fixed 5-value enum; versioned prompt `prompts/feedback-analysis/v1`. PII masking before sending: phone, email, plate, TCKN (with checksum), IBAN, card (Luhn). Retries with backoff for 24 h, status stays `analyzing`; after 24 h → `unanalyzed` and treated as valid only if pre-checks passed, normal trust and budget guard not active. No user-visible `failed` status. Profanity in a real complaint is **not** spam.
+- **LLM (Analysis = anti-corruption layer):** `SentimentAnalyzer` port; OpenAI adapter is Must, Anthropic is Should (`LLM_DRIVER`); model chosen by measurement on an eval set (~50 per sector for demo) (ADR-018, open). Output JSON `{sentiment, topicKey, isValid, spamReason}`; sentiment is a fixed 5-value enum; versioned prompt `prompts/feedback-analysis/v1`. PII masking before sending: phone, email, plate, TCKN (with checksum), IBAN, card (Luhn). Retries with backoff for 24 h, status stays `analyzing`; after 24 h the feedback is always closed as `unanalyzed` and its branch lock released; it is rewarded only if it was reward-eligible at submission (normal trust + valid platform proof) and the budget guard is off (SRS CR-007, team proposal). No user-visible `failed` status. Profanity in a real complaint is **not** spam.
 - **Gamification:** append-only ledger (`idempotency_key` unique: `reward:{id}`, `clawback:{id}`), wallet = sum of ledger. Total XP to reach level L = 100 × L × (L − 1) / 2; the level is derived from XP, not stored in the domain. Each entry stores `xpTotalAfter` (SDD v1.2) for level-up; its earning date is the feedback's `submittedAt` (FR-GAM-08). The wallet is loaded together with the ledger key in question (`findWithLedgerKey`); "already awarded" is `ok` and saves nothing. Rewards 10 XP / 5 points, configurable.
 - **B2B:** OAuth2 client credentials, scopes `b2b.feedback.read` / `b2b.summary.read`, cross-tenant access returns 404, only masked text, Europe/Istanbul for date ranges, cursor pagination.
 - **API errors:** RFC 9457 Problem Details with `code`; `REWARD_COOLDOWN` / `ATTEMPTS_EXHAUSTED` → **422** with `retryAfterSeconds` in body; **429 only for `RATE_LIMITED`**; no user-facing `message` field (app localizes by code). Comment text 20–1000 code points after NFC.

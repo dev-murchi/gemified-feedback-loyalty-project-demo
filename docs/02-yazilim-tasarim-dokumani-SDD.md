@@ -9,7 +9,7 @@ Bu doküman, Gereksinim Dokümanı v1.6'daki gereksinimlerin nasıl karşılanac
 | Alan | Değer |
 | --- | --- |
 | Doküman türü | Yazılım Tasarım Dokümanı (SDD) – MVP |
-| Sürüm | 1.2 (12 Ekim 2026: LEDGER_ENTRIES.xp_total_after; geliştirme sırasında, S0-06). 1.1 (11 Ekim 2026: geliştirme başlangıcı; ADR-019..021, alan modeliyle hizalama). 1.0: tasarım aşaması kapanış sürümü, 10 Ekim 2026 |
+| Sürüm | 1.3 (15 Ekim 2026: 24 saat kuralı, SRS CR-007; ekip önerisi, müşteri doğrulaması bekliyor). 1.2 (12 Ekim 2026: LEDGER_ENTRIES.xp_total_after; geliştirme sırasında, S0-06). 1.1 (11 Ekim 2026: geliştirme başlangıcı; ADR-019..021, alan modeliyle hizalama). 1.0: tasarım aşaması kapanış sürümü, 10 Ekim 2026 |
 | Dayandığı doküman | Gereksinim Dokümanı (SRS) v1.6 (`01-gereksinim-dokumani-SRS.md`) |
 | İlgili dokümanlar | Tehdit Modeli (`03-tehdit-modeli.md`), Test Stratejisi (`04-test-stratejisi.md`), Alan Modeli (`06-alan-modeli.md`), Mühendislik Standartları (`07-muhendislik-standartlari.md`), Sprint 0 Backlog (`08-sprint-0-backlog.md`) |
 | SDLC aşaması | Geliştirme (Sprint 0) |
@@ -347,7 +347,7 @@ erDiagram
 - `WALLETS` ledger'ın hızlı okunan özetidir; ledger kaydıyla aynı transaction'da güncellenir. `level` XP'den türetilir; formül değişirse yeniden hesaplanır.
 - `QR_CODES.token` en az 128 bit rastgelelikte ve tekildir (FR-QR-01).
 - `DEVICE_KEYS.key_identifier` tekildir (iOS: App Attest key ID; Android: açık anahtarın SHA-256 özeti).
-- Duygu, sabit 5 değerli bir enum'dur. Yorum durumu: `analyzing`, `valid`, `spam`, `unanalyzed` (FR-AI-09). Teknik aksaklıkta denemeler 24 saat sürer ve durum bu süre boyunca `analyzing` kalır; deneme sayısı ve son hata worker tarafından ayrıca kaydedilir (FR-AI-05).
+- Duygu, sabit 5 değerli bir enum'dur. Yorum durumu: `analyzing`, `valid`, `spam`, `unanalyzed` (FR-AI-09). Teknik aksaklıkta denemeler 24 saat sürer ve durum bu süre boyunca `analyzing` kalır; deneme sayısı ve son hata worker tarafından ayrıca kaydedilir (FR-AI-05). 24 saatin sonunda yorum her durumda `unanalyzed` olarak kapatılır (6.4).
 - Seviye toplam XP'den türetilir: L seviyesine ulaşmak için gereken toplam XP = 100 × L × (L − 1) / 2 (FR-GAM-02).
 - Konular sabit bir İngilizce anahtar (`key`, ör. `toilet_cleanliness`) ve Türkçe görünen ad (`name`) taşır; her sektörün listesinde "diğer" (`other`) konusu bulunur. Etiket adı değişse de anahtar sabit kaldığı için geçmiş veriler karşılaştırılabilir kalır (TZ-12).
 - Aggregate kökü tablolarında `version` sütunu iyimser kilit içindir (ADR-019). `FEEDBACKS.request_fingerprint`, aynı Idempotency-Key'in farklı gövdeyle tekrar kullanılmasını yakalar (FR-AI-10). `FEEDBACK_ANALYSES.attempts`, `next_attempt_at` ve `last_error` teknik aksaklıktaki yeniden deneme durumunu tutar (FR-AI-05).
@@ -428,7 +428,7 @@ REWARD_COOLDOWNS satırı, kullanıcı–şube çifti için üç bağımsız kur
 | Geçerli, normal güven | `last_rewarded_at = feedback.submitted_at`, `pending_feedback_id = NULL`; ledger + cüzdan | `pending_feedback_id = bu yorum` |
 | Geçerli, düşük güven | `pending_feedback_id = NULL`; ödül yok | `pending_feedback_id = bu yorum` |
 | Spam | `pending_feedback_id = NULL`; deneme geri alınmaz | `pending_feedback_id = bu yorum` |
-| 24 saatte analiz edilemedi (FR-AI-09) | Geçerli gibi işlenir; yalnızca ön kontroller geçmişse, hesap normal güvendeyse ve bütçe koruması devrede değilse | Süpürücü iş |
+| 24 saatte analiz edilemedi (FR-AI-09) | `unanalyzed` olarak kapatılır; `pending_feedback_id = NULL` her durumda. Ledger + cüzdan yalnızca yorum gönderimde ödüle uygunsa (normal güven ve geçerli platform kanıtı) ve bütçe koruması devrede değilse; aksi halde ödül verilmez *(ekip önerisi; müşteri doğrulaması bekliyor, SRS CR-007)* | Süpürücü iş |
 
 `pending_feedback_id = bu yorum` koşulu iki iş görür: gecikmeli çalışan eski bir işin başka bir yorumun kilidini açmasını engeller ve geçişleri idempotent yapar. Ödül, gönderim zamanına göre hesaplandığı için analiz gecikmesi kullanıcının bekleme süresini uzatmaz.
 
@@ -595,7 +595,7 @@ Analiz başına maliyet her analizde kaydedilir; aylık toplam Redis'te tutulur 
 | Eşik | Davranış |
 | --- | --- |
 | %80 | Yöneticiye uyarı |
-| %100 | Yeni analiz işleri kuyrukta bekletilir; alarm üretilir; FR-AI-09'daki otomatik onay devre dışı kalır (bütçe tükendiğinde spam'in otomatik ödüllendirilmesi önlenir) |
+| %100 | Yeni analiz işleri kuyrukta bekletilir; alarm üretilir; 24 saati dolan bekleyen yorumlar ödülsüz `unanalyzed` olarak kapatılır: bütçe tükendiğinde spam'in otomatik ödüllendirilmesi önlenir ve kullanıcı o şubede kilitli kalmaz (SRS CR-007) |
 
 ### 8.6 Maskeleme Kuralları
 

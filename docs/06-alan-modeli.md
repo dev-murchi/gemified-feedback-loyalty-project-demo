@@ -8,8 +8,9 @@ Bu doküman, SDD'deki mimariyi Domain-Driven Design ile kodlanabilir hale getiri
 
 | Alan | Değer |
 | --- | --- |
-| Sürüm | 1.1 |
-| Dayandığı dokümanlar | SRS v1.6, SDD v1.2, API sözleşmesi 0.2.5-demo |
+| Sürüm | 1.2 |
+| Dayandığı dokümanlar | SRS v1.6, SDD v1.3, API sözleşmesi 0.2.5-demo |
+| Değişiklik (1.2) | 24 saat kuralı: yorum her durumda `unanalyzed` olarak kapatılır ve kilit açılır; ödül yalnızca uygunsa ve bütçe koruması kapalıysa (SRS CR-007) |
 | Değişiklik (1.1) | Olay tiplerinin yeri: domain/events/, public/ yalnızca yeniden dışa aktarır |
 
 ## 2. Bounded Context'ler
@@ -146,7 +147,7 @@ Her context için: aggregate'ler ve korudukları kurallar (invariant), değer ne
 | Yayınlanan olaylar | `FeedbackSubmitted` (asenkron), `FeedbackValidated` (senkron) |
 | Dinlenen olaylar | `FeedbackAnalyzed` |
 | Driven port'lar | `FeedbackRepository`, `RewardCooldownRepository`, `RawTextCipher`, `QrResolver`, `PlatformProofVerifier`, `RewardLookup`, `Clock`, `IdGenerator` |
-| Use case'ler | `SubmitFeedback`, `GetFeedbackStatus`, `ApplyAnalysisResult` (olay işleyicisi), `FinalizeUnanalyzedFeedback` (24 saat, FR-AI-09) |
+| Use case'ler | `SubmitFeedback`, `GetFeedbackStatus`, `ApplyAnalysisResult` (olay işleyicisi), `FinalizeUnanalyzedFeedback` (24 saat, FR-AI-09: her durumda `unanalyzed` olarak kapatır ve kilidi açar; ödül yalnızca gönderimde uygunsa ve bütçe koruması kapalıysa) |
 
 **RewardCooldown'ın davranışı:**
 
@@ -215,7 +216,7 @@ Yalnızca bir tüketicisi olan olaylar tanımlanır; kullanılmayan olay yazılm
 - Bir iş akışında en fazla bir asenkron sınır vardır: `FeedbackSubmitted`. Asenkron olaylar yalnızca outbox üzerinden yayınlanır (ADR-005).
 - Olaylar geçmiş zaman kipinde adlandırılır ve değişmez değer nesneleridir.
 - Olay tipleri yayıncı context'in domain'inde tanımlanır (`src/contexts/<context>/domain/events/`); `<context>/public/` yalnızca tipi yeniden dışa aktarır (`export type { … }`). Tüketiciler olayı yalnızca yayıncının `public/` klasöründen içe aktarır, kendi kopyasını yazmaz. Olay dosyaları yalnızca shared kernel'i (tipli kimlikler, `DomainEvent`, `Date` ve ilkel tipler) kullanır; context'in kendi değer nesnelerini içe aktarmaz.
-- `FinalizeUnanalyzedFeedback`, 24 saatin sonunda `FeedbackAnalyzed` yerine doğrudan `FeedbackValidated` üretir (FR-AI-09 koşullarıyla).
+- `FinalizeUnanalyzedFeedback`, 24 saatin sonunda hâlâ `analyzing` olan yorumu `unanalyzed` olarak kapatır ve `FeedbackAnalyzed` yerine doğrudan `FeedbackValidated` üretir (FR-AI-09). Ödül yalnızca yorum gönderimde ödüle uygunsa ve bütçe koruması devrede değilse verilir; aksi halde olay `rewardEligible: false` ile üretilir. Her iki durumda şubedeki kilit açılır. *(Ekip önerisi; müşteri doğrulaması bekliyor, SRS CR-007.)*
 
 ## 7. Transaction Sınırları
 

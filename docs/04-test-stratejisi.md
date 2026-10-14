@@ -4,12 +4,13 @@
 
 ## 1. Amaç
 
-Bu doküman, gereksinimlerin (SRS v1.6) ve tasarım kararlarının (SDD v1.2) nasıl doğrulanacağını tanımlar. Odak, sistemin en pahalı hatalarıdır: çift veya kayıp ödül, markalar arası veri sızıntısı, sahte kimlikle ödül toplama ve fark edilmeden düşen AI kalitesi.
+Bu doküman, gereksinimlerin (SRS v1.6) ve tasarım kararlarının (SDD v1.3) nasıl doğrulanacağını tanımlar. Odak, sistemin en pahalı hatalarıdır: çift veya kayıp ödül, markalar arası veri sızıntısı, sahte kimlikle ödül toplama ve fark edilmeden düşen AI kalitesi.
 
 | Alan | Değer |
 | --- | --- |
-| Sürüm | 1.3 |
-| Dayandığı dokümanlar | SRS v1.6, SDD v1.2, Tehdit Modeli v1.0, API sözleşmesi 0.2.5-demo |
+| Sürüm | 1.4 |
+| Dayandığı dokümanlar | SRS v1.6, SDD v1.3, Tehdit Modeli v1.0, API sözleşmesi 0.2.5-demo |
+| Değişiklik (1.4) | TC-AI-04 ve TC-AI-05: 24 saatte analiz edilemeyen yorum her durumda kapatılır; ödül yalnızca uygunsa ve bütçe koruması kapalıysa (SRS CR-007) |
 | Değişiklik (1.3) | Test aracı Jest yerine Vitest: NestJS 12 yalnızca ESM; Vitest ESM'i doğal olarak destekler |
 
 ## 2. Test Seviyeleri ve Araçlar
@@ -101,8 +102,8 @@ Gerçek App Attest ve Play Integrity yanıtları otomatik testte üretilemediği
 | TC-AI-01 | 1.001 karakterlik yorum | `TEXT_TOO_LONG`; LLM çağrılmaz | FR-AI-01 |
 | TC-AI-02 | Şemaya uymayan LLM yanıtı | Reddedilir, yeniden denenir | FR-AI-03 |
 | TC-AI-03 | LLM kesintisi | Yorum kaybolmaz; denemeler üstel beklemeyle sürer ve durum `analyzing` kalır; kesinti bitince analiz tamamlanır | FR-AI-05 |
-| TC-AI-04 | 24 saat analiz edilemeyen, ön kontrolden geçmiş yorum | Geçerli sayılır, ödül verilir, B2B'de "analiz edilemedi" | FR-AI-09 |
-| TC-AI-05 | Aynı durum, bütçe koruması devredeyken | Otomatik onay uygulanmaz | FR-AI-09, FR-AI-12 |
+| TC-AI-04 | 24 saat analiz edilemeyen, gönderimde ödüle uygun yorum; bütçe koruması kapalı | `unanalyzed` olarak kapatılır, ödül verilir, şube kilidi açılır, B2B'de "analiz edilemedi" | FR-AI-09 |
+| TC-AI-05 | Aynı durum, bütçe koruması devredeyken; ayrıca düşük güvenli veya kanıtsız gönderilmiş yorum | `unanalyzed` olarak ödülsüz kapatılır, şube kilidi açılır | FR-AI-09, FR-AI-12 |
 | TC-AI-06 | Telefon, e-posta, plaka, T.C. kimlik içeren metin | LLM'e giden metinde maskelenmiş | FR-AI-07 |
 | TC-AI-07 | Uygulama logları | Yorum metni ve kişisel veri içermez | NFR-PRIV-02 |
 | TC-AI-08 | Bütçenin %80 ve %100'ü | Uyarı; yeni analizler bekletilir | FR-AI-12 |
