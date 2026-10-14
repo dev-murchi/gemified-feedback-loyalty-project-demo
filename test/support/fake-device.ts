@@ -97,6 +97,22 @@ export class FakeDevice {
     return signer.sign(message, options.rawSignature).toString('base64');
   }
 
+  /**
+   * The `X-Platform-Proof` in development mode: a DER signature over
+   * SHA-256(Idempotency-Key ‖ raw body), standard base64.
+   */
+  requestProof(
+    idempotencyKey: string,
+    body: Uint8Array,
+    options: EvidenceOptions = {},
+  ): string {
+    const message =
+      options.signedMessage ??
+      sha256(Buffer.from(idempotencyKey, 'utf8'), body);
+    const signer = options.signer ?? this;
+    return signer.sign(message, options.rawSignature).toString('base64');
+  }
+
   /** ES256 over `message` as the platform signer does: it hashes the given bytes once more. */
   sign(message: Buffer, rawSignature = false): Buffer {
     return sign('sha256', message, {

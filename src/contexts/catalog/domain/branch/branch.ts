@@ -115,9 +115,15 @@ export class Branch extends AggregateRoot {
 
   /** FR-QR-02: only an active code of this branch is accepted. */
   accepts(token: QrToken): boolean {
-    return this.#state.qrCodes.some(
-      (code) => code.token === token && code.status === 'active',
+    return this.activeQrCode(token) !== undefined;
+  }
+
+  /** The active code with this token, or undefined if the token is unknown here or revoked. */
+  activeQrCode(token: QrToken): QrCode | undefined {
+    const code = this.#state.qrCodes.find(
+      (candidate) => candidate.token === token && candidate.status === 'active',
     );
+    return code === undefined ? undefined : copyQrCode(code);
   }
 
   #replace(updated: QrCode): void {

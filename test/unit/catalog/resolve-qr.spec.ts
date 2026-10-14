@@ -15,6 +15,7 @@ describe('ResolveQr (QrResolver)', () => {
   let harness: CatalogHarness;
   let resolver: ResolveQr;
   let active: QrToken;
+  let activeId: string;
   let revoked: QrToken;
 
   beforeEach(async () => {
@@ -26,6 +27,7 @@ describe('ResolveQr (QrResolver)', () => {
       QrToken,
       QrToken,
     ];
+    activeId = branch.qrCodes[1]?.id ?? '';
     branch.revokeQrCode(revoked, new Date('2026-10-12T10:00:00.000Z'));
     await harness.uow.run(async () => {
       await harness.brands.save(aBrand({ sector: 'coffee' }));
@@ -33,14 +35,19 @@ describe('ResolveQr (QrResolver)', () => {
     });
   });
 
-  it('resolves an active token to its branch, brand and sector (FR-QR-01)', async () => {
+  it('resolves an active token to its code, branch, brand and sector (FR-QR-01)', async () => {
     // When the active token is resolved
     const result = await resolver.resolve(active);
 
     // Then it points to the branch and its brand
     expect(result).toEqual({
       ok: true,
-      value: { branchId: BRANCH_ID, brandId: BRAND_ID, sector: 'coffee' },
+      value: {
+        qrCodeId: activeId,
+        branchId: BRANCH_ID,
+        brandId: BRAND_ID,
+        sector: 'coffee',
+      },
     });
   });
 

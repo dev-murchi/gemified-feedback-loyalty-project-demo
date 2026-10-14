@@ -23,14 +23,19 @@ export class ResolveQr implements QrResolver {
     const token = QrToken.parse(rawToken);
     if (!token.ok) return token;
     const branch = await this.deps.branches.findByQrToken(token.value);
-    if (branch === undefined || !branch.accepts(token.value))
-      return err(QR_INVALID);
+    const code = branch?.activeQrCode(token.value);
+    if (branch === undefined || code === undefined) return err(QR_INVALID);
     const brand = await this.deps.brands.findById(branch.brandId);
     if (brand === undefined) {
       throw new Error(
         `Brand ${branch.brandId} of branch ${branch.id} is missing`,
       );
     }
-    return ok({ branchId: branch.id, brandId: brand.id, sector: brand.sector });
+    return ok({
+      qrCodeId: code.id,
+      branchId: branch.id,
+      brandId: brand.id,
+      sector: brand.sector,
+    });
   }
 }

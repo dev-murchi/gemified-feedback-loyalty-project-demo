@@ -4,6 +4,8 @@ import type { Result } from '../../../shared-kernel/result.js';
 import type { CatalogSector } from './catalog-sector.js';
 
 export interface ResolvedQr {
+  /** The scanned QR code (FEEDBACKS.qr_code_id), so a feedback records which code was used. */
+  readonly qrCodeId: string;
   readonly branchId: BranchId;
   readonly brandId: BrandId;
   readonly sector: CatalogSector;

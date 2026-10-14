@@ -33,6 +33,22 @@ describe('Branch', () => {
     expect(branch.accepts(code.token)).toBe(true);
   });
 
+  it('finds the active code of a token, as a copy, and no code once it is revoked', () => {
+    // Given a branch with one QR code
+    const branch = aBranch({ qrCodes: 0 });
+    const code = branch.issueQrCode(issuing());
+
+    // When the found code is changed by the caller, and the code is then revoked
+    const found = branch.activeQrCode(code.token);
+    found?.createdAt.setUTCFullYear(2030);
+    branch.revokeQrCode(code.token, clock.now());
+
+    // Then it was the code, the branch kept its date, and a revoked code is not found
+    expect(found?.id).toBe(code.id);
+    expect(branch.qrCodes[0]?.createdAt).toEqual(clock.now());
+    expect(branch.activeQrCode(code.token)).toBeUndefined();
+  });
+
   it('issues a different token for every QR code', () => {
     // Given a branch and one source of randomness
     const branch = aBranch({ qrCodes: 0 });
