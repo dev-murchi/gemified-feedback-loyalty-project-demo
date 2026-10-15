@@ -6,7 +6,7 @@ import { LOGGER } from './tokens.js';
 
 /**
  * The HTTP set-up every entry point of the API shares: main.api.ts and the e2e tests. The
- * application must be created with `bodyParser: false` (configureHttp registers the 8 KB parser).
+ * application must be created with HTTP_APP_OPTIONS (configureHttp registers the 8 KB parser).
  */
 export function configureApp(app: NestExpressApplication): void {
   configureHttp(app, {

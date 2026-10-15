@@ -1,4 +1,5 @@
 import type { NestExpressApplication } from '@nestjs/platform-express';
+import { HTTP_APP_OPTIONS } from '../../src/platform/http/raw-body.js';
 import { Test, type TestingModuleBuilder } from '@nestjs/testing';
 import { inject } from 'vitest';
 import { AppModule } from '../../src/composition/app.module.js';
@@ -42,9 +43,8 @@ export async function startApp(
     clock,
     logger,
   }).compile();
-  const app = moduleRef.createNestApplication<NestExpressApplication>({
-    bodyParser: false,
-  });
+  const app =
+    moduleRef.createNestApplication<NestExpressApplication>(HTTP_APP_OPTIONS);
   // Registered first, so it sees every response, including those of the platform filter.
   app.use(contractRecorder(inject('contractPath')));
   configureApp(app);

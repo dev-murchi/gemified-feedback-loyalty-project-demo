@@ -9,6 +9,7 @@ import {
   SESSION_WALLET_READER,
 } from '../contexts/identity/adapters/inbound/http/tokens.js';
 import { DevAttestationVerifier } from '../contexts/identity/adapters/outbound/dev-attestation.verifier.js';
+import { DevRequestProofVerifier } from '../contexts/identity/adapters/outbound/dev-request-proof.verifier.js';
 import { DevSessionProofVerifier } from '../contexts/identity/adapters/outbound/dev-session-proof.verifier.js';
 import { JoseAccessTokens } from '../contexts/identity/adapters/outbound/jose-access-tokens.js';
 import { MemoryChallengeStore } from '../contexts/identity/adapters/outbound/memory-challenge.store.js';
@@ -25,6 +26,7 @@ import { AuthenticateRequest } from '../contexts/identity/application/use-cases/
 import { CreateChallenge } from '../contexts/identity/application/use-cases/create-challenge.js';
 import { CreateSession } from '../contexts/identity/application/use-cases/create-session.js';
 import { RegisterDevice } from '../contexts/identity/application/use-cases/register-device.js';
+import { VerifyPlatformProof } from '../contexts/identity/application/use-cases/verify-platform-proof.js';
 import type { WalletReader } from '../contexts/gamification/public/wallet-reader.js';
 import { UserId } from '../shared-kernel/ids.js';
 import { CryptoRandomSource } from '../shared-kernel/adapters/crypto-random-source.js';
@@ -39,6 +41,7 @@ import {
   GET_WALLET,
   IN_MEMORY_STORE,
   LOGGER,
+  PLATFORM_PROOF_VERIFIER,
   SESSION_PROOF_VERIFIER,
   SIGNING_KEY,
   USER_REPOSITORY,
@@ -174,11 +177,23 @@ const walletReaderFor = (wallets: WalletReader): SessionWalletReader => ({
         new AuthenticateRequest({ tokens }),
     },
     {
+      // The development proof checker refuses NODE_ENV=production, like the other verifiers.
+      provide: PLATFORM_PROOF_VERIFIER,
+      inject: [USER_REPOSITORY],
+      useFactory: (users: UserRepository) =>
+        new VerifyPlatformProof({
+          users,
+          proofs: DevRequestProofVerifier.forEnvironment(
+            process.env['NODE_ENV'],
+          ),
+        }),
+    },
+    {
       provide: SESSION_WALLET_READER,
       inject: [GET_WALLET],
       useFactory: walletReaderFor,
     },
   ],
-  exports: [AUTHENTICATE_REQUEST, USER_REPOSITORY],
+  exports: [AUTHENTICATE_REQUEST, USER_REPOSITORY, PLATFORM_PROOF_VERIFIER],
 })
 export class IdentityModule {}

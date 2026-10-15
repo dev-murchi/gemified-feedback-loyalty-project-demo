@@ -266,6 +266,12 @@ describe('SubmitFeedback', () => {
       expect(errorOf(result)).toEqual({ code: 'QR_INVALID' });
       await expectNothingStored();
       expect(fixture.proofs.requests).toEqual([]);
+      expect(fixture.logger.warnings).toEqual([
+        {
+          message: 'Feedback with an invalid QR token rejected',
+          fields: { userId: FEEDBACK_USER_ID, requestId: 'req-1' },
+        },
+      ]);
     });
   });
 

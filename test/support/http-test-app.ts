@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import type { NestExpressApplication } from '@nestjs/platform-express';
+import { HTTP_APP_OPTIONS } from '../../src/platform/http/raw-body.js';
 import { Test } from '@nestjs/testing';
 import { configureHttp } from '../../src/platform/http/configure-http.js';
 import {
@@ -49,9 +50,8 @@ export async function startHttpTestApp(): Promise<HttpTestApp> {
   const moduleRef = await Test.createTestingModule({
     imports: [HttpTestModule],
   }).compile();
-  const app = moduleRef.createNestApplication<NestExpressApplication>({
-    bodyParser: false,
-  });
+  const app =
+    moduleRef.createNestApplication<NestExpressApplication>(HTTP_APP_OPTIONS);
   configureHttp(app, { ids: new SequentialIdGenerator(), logger });
   await app.init();
   return { app, logger };

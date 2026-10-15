@@ -1,5 +1,6 @@
 import type { Clock } from '../../../../shared-kernel/clock.js';
 import type { IdGenerator } from '../../../../shared-kernel/id-generator.js';
+import type { Logger } from '../../../../shared-kernel/logger.js';
 import { FeedbackId, type UserId } from '../../../../shared-kernel/ids.js';
 import { err, ok, type Result } from '../../../../shared-kernel/result.js';
 import { retryOnConflict } from '../../../../shared-kernel/retry-on-conflict.js';
@@ -41,6 +42,7 @@ export interface SubmitFeedbackDeps {
   readonly uow: UnitOfWork;
   readonly ids: IdGenerator;
   readonly clock: Clock;
+  readonly logger: Logger;
 }
 
 /** POST /v1/feedbacks as the inbound adapter hands it over, with the caller from the token. */
@@ -150,7 +152,14 @@ export class SubmitFeedback {
     const text = FeedbackText.create(cmd.text);
     if (!text.ok) return text;
     const qr = await this.deps.qrCodes.resolve(cmd.qrToken);
-    if (!qr.ok) return qr;
+    if (!qr.ok) {
+      // TC-QR-07: rejected tokens are logged to spot guessing; the token itself is not.
+      this.deps.logger.warn('Feedback with an invalid QR token rejected', {
+        userId: cmd.userId,
+        requestId: cmd.correlationId,
+      });
+      return qr;
+    }
     const proof = await this.deps.proofs.verify({
       userId: cmd.userId,
       keyIdentifier: cmd.keyIdentifier,

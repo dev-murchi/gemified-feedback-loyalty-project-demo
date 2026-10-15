@@ -3,6 +3,7 @@ import { PersistenceModule } from './persistence.module.js';
 import { CatalogModule } from './catalog.module.js';
 import { GamificationModule } from './gamification.module.js';
 import { EventRoutesModule } from './event-routes.module.js';
+import { FeedbackModule } from './feedback.module.js';
 import { IdentityModule } from './identity.module.js';
 import { WalletHttpModule } from './wallet-http.module.js';
 
@@ -14,6 +15,7 @@ import { WalletHttpModule } from './wallet-http.module.js';
     GamificationModule,
     IdentityModule,
     WalletHttpModule,
+    FeedbackModule,
     EventRoutesModule,
   ],
 })

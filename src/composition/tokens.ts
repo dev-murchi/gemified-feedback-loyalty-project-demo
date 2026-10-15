@@ -13,6 +13,7 @@ export const QR_RESOLVER = Symbol('QrResolver');
 export const LABEL_SET_PROVIDER = Symbol('LabelSetProvider');
 export const REVOKE_QR_CODE = Symbol('RevokeQrCode');
 export const DEMO_CATALOG = Symbol('DemoCatalog');
+export const BRANCH_DIRECTORY = Symbol('BranchDirectory');
 
 export const WALLET_REPOSITORY = Symbol('WalletRepository');
 export const OPEN_WALLET = Symbol('OpenWallet');
@@ -27,3 +28,9 @@ export const SESSION_PROOF_VERIFIER = Symbol('SessionProofVerifier');
 export const SIGNING_KEY = Symbol('SigningKey');
 export const ACCESS_TOKENS = Symbol('AccessTokens');
 export const AUTHENTICATE_REQUEST = Symbol('AuthenticateRequest');
+export const PLATFORM_PROOF_VERIFIER = Symbol('PlatformProofVerifier');
+
+export const FEEDBACK_REPOSITORY = Symbol('FeedbackRepository');
+export const REWARD_COOLDOWN_REPOSITORY = Symbol('RewardCooldownRepository');
+export const RAW_TEXT_CIPHER = Symbol('RawTextCipher');
+export const APPLY_ANALYSIS_RESULT = Symbol('ApplyAnalysisResult');

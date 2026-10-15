@@ -1,5 +1,7 @@
 import type { BrandRow } from '../contexts/catalog/adapters/outbound/memory-brand.repository.js';
 import type { BranchRow } from '../contexts/catalog/adapters/outbound/memory-branch.repository.js';
+import type { FeedbackRow } from '../contexts/feedback/adapters/outbound/memory-feedback.repository.js';
+import type { RewardCooldownRow } from '../contexts/feedback/adapters/outbound/memory-reward-cooldown.repository.js';
 import type { UserRow } from '../contexts/identity/adapters/outbound/memory-user.repository.js';
 import type { LabelSetRow } from '../contexts/catalog/adapters/outbound/memory-label-set.repository.js';
 import type {
@@ -25,6 +27,11 @@ export interface IdentityTables {
   readonly users: InMemoryTable<string, UserRow>;
 }
 
+export interface FeedbackTables {
+  readonly feedbacks: InMemoryTable<string, FeedbackRow>;
+  readonly cooldowns: InMemoryTable<string, RewardCooldownRow>;
+}
+
 export interface GamificationTables {
   readonly wallets: InMemoryTable<string, WalletRow>;
   readonly ledger: InMemoryTable<string, LedgerRow>;
@@ -39,6 +46,7 @@ export interface InMemoryStore {
   readonly clock: Clock;
   readonly ids: IdGenerator;
   readonly catalog: CatalogTables;
+  readonly feedback: FeedbackTables;
   readonly gamification: GamificationTables;
   readonly identity: IdentityTables;
 }
@@ -63,6 +71,10 @@ export function createInMemoryStore(
     wallets: new InMemoryTable<string, WalletRow>(),
     ledger: new InMemoryTable<string, LedgerRow>(),
   } satisfies GamificationTables;
+  const feedback = {
+    feedbacks: new InMemoryTable<string, FeedbackRow>(),
+    cooldowns: new InMemoryTable<string, RewardCooldownRow>(),
+  } satisfies FeedbackTables;
   const identity = {
     users: new InMemoryTable<string, UserRow>(),
   } satisfies IdentityTables;
@@ -70,6 +82,7 @@ export function createInMemoryStore(
     routes,
     tables: [
       ...Object.values(catalog),
+      ...Object.values(feedback),
       ...Object.values(gamification),
       ...Object.values(identity),
     ],
@@ -77,5 +90,5 @@ export function createInMemoryStore(
     clock,
     ids,
   });
-  return { uow, clock, ids, catalog, gamification, identity };
+  return { uow, clock, ids, catalog, feedback, gamification, identity };
 }

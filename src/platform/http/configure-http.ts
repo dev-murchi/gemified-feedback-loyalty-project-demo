@@ -15,7 +15,7 @@ export interface HttpDefaultsDeps {
 /**
  * What every HTTP entry point gets: a request id first (so even a rejected body has one), the 8 KB
  * JSON limit, and the Problem Details filter. The application must be created with
- * `bodyParser: false`; the parser is registered here, after the request id.
+ * HTTP_APP_OPTIONS (raw-body.ts); the parser is registered here, after the request id.
  */
 export function configureHttp(
   app: NestExpressApplication,

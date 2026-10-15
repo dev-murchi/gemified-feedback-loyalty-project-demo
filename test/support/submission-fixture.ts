@@ -12,6 +12,7 @@ import {
 import { DEFAULT_REWARD_LIMITS } from '../../src/contexts/feedback/domain/reward-cooldown/reward-limits.js';
 import { CryptoRandomSource } from '../../src/shared-kernel/adapters/crypto-random-source.js';
 import { FakeClock } from './fake-clock.js';
+import { RecordingLogger } from './recording-logger.js';
 import { FEEDBACK_USER_ID, IDEMPOTENCY_KEY, T0 } from './feedback-builders.js';
 import {
   fakeBranchDirectory,
@@ -60,6 +61,7 @@ export function aSubmission(
 export interface SubmissionFixture {
   readonly harness: FeedbackHarness;
   readonly clock: FakeClock;
+  readonly logger: RecordingLogger;
   readonly qrCodes: FakeQrResolver;
   readonly proofs: FakeProofs;
   readonly rewards: FakeRewards;
@@ -83,6 +85,7 @@ export async function submissionFixture(
   const cooldowns =
     options.wrapCooldowns?.(harness.cooldowns) ?? harness.cooldowns;
   const clock = new FakeClock(T0);
+  const logger = new RecordingLogger();
   const qrCodes = fakeQrResolver();
   const proofs = fakeProofs();
   const rewards = fakeRewards();
@@ -101,6 +104,7 @@ export async function submissionFixture(
     uow: harness.uow,
     ids: new SequentialIdGenerator(),
     clock,
+    logger,
   });
   const status = new GetFeedbackStatus({
     feedbacks: harness.feedbacks,
@@ -112,6 +116,7 @@ export async function submissionFixture(
   return {
     harness,
     clock,
+    logger,
     qrCodes,
     proofs,
     rewards,

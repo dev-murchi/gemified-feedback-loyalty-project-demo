@@ -1,4 +1,4 @@
-import { generateKeyPairSync } from 'node:crypto';
+import { generateKeyPairSync, randomBytes } from 'node:crypto';
 import { Test } from '@nestjs/testing';
 import { AppModule } from '../../src/composition/app.module.js';
 import { AuthClient, EMPTY_WALLET, problemOf } from '../support/auth-client.js';
@@ -87,10 +87,12 @@ describe('start-up configuration (e2e)', () => {
     Test.createTestingModule({ imports: [AppModule] }).compile();
 
   it('refuses to start with the development verifier in production (TC-AUTH-09)', async () => {
-    // Given a production configuration that is otherwise complete (a signing key is set)
+    // Given a production configuration that is otherwise complete (signing and raw-text keys set)
     vi.stubEnv('NODE_ENV', 'production');
     vi.stubEnv('JWT_PRIVATE_KEY', privateKeyPem());
     vi.stubEnv('JWT_KEY_ID', 'prod-1');
+    vi.stubEnv('RAW_TEXT_KEY', randomBytes(32).toString('base64'));
+    vi.stubEnv('RAW_TEXT_KEY_ID', 'prod-1');
 
     // When the application starts
     // Then it fails because of the development verifier
@@ -119,8 +121,27 @@ describe('start-up configuration (e2e)', () => {
     // When the application starts
     const running = await startApp();
 
-    // Then it says so
-    expect(running.logger.warnings).toHaveLength(1);
+    // Then it says so, once
+    const signingKeyWarnings = running.logger.warnings.filter((warning) =>
+      warning.message.includes('JWT_PRIVATE_KEY'),
+    );
+    expect(signingKeyWarnings).toHaveLength(1);
+    await running.app.close();
+  });
+
+  it('warns that a generated raw-text key is used outside production', async () => {
+    // Given no raw-text master key configured
+    vi.stubEnv('NODE_ENV', 'test');
+    vi.stubEnv('RAW_TEXT_KEY', '');
+
+    // When the application starts
+    const running = await startApp();
+
+    // Then it says so, once
+    const rawTextKeyWarnings = running.logger.warnings.filter((warning) =>
+      warning.message.includes('RAW_TEXT_KEY'),
+    );
+    expect(rawTextKeyWarnings).toHaveLength(1);
     await running.app.close();
   });
 });

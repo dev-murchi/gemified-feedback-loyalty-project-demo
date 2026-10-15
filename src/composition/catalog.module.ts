@@ -3,12 +3,14 @@ import { loadDemoCatalog } from '../contexts/catalog/adapters/inbound/demo/demo-
 import { MemoryBrandRepository } from '../contexts/catalog/adapters/outbound/memory-brand.repository.js';
 import { MemoryBranchRepository } from '../contexts/catalog/adapters/outbound/memory-branch.repository.js';
 import { MemoryLabelSetRepository } from '../contexts/catalog/adapters/outbound/memory-label-set.repository.js';
+import { FindBranchName } from '../contexts/catalog/application/use-cases/find-branch-name.js';
 import { ProvideLabelSet } from '../contexts/catalog/application/use-cases/provide-label-set.js';
 import { ResolveQr } from '../contexts/catalog/application/use-cases/resolve-qr.js';
 import { RevokeQrCode } from '../contexts/catalog/application/use-cases/revoke-qr-code.js';
 import { isDemoDataEnabled } from './demo-data.js';
 import type { InMemoryStore } from './in-memory-store.js';
 import {
+  BRANCH_DIRECTORY,
   CATALOG_REPOSITORIES,
   DEMO_CATALOG,
   IN_MEMORY_STORE,
@@ -63,6 +65,12 @@ async function demoCatalog(
         new ResolveQr(repositories),
     },
     {
+      provide: BRANCH_DIRECTORY,
+      inject: [CATALOG_REPOSITORIES],
+      useFactory: (repositories: CatalogRepositories) =>
+        new FindBranchName(repositories),
+    },
+    {
       provide: LABEL_SET_PROVIDER,
       inject: [CATALOG_REPOSITORIES],
       useFactory: (repositories: CatalogRepositories) =>
@@ -84,6 +92,6 @@ async function demoCatalog(
       useFactory: demoCatalog,
     },
   ],
-  exports: [QR_RESOLVER, LABEL_SET_PROVIDER, REVOKE_QR_CODE],
+  exports: [QR_RESOLVER, BRANCH_DIRECTORY, LABEL_SET_PROVIDER, REVOKE_QR_CODE],
 })
 export class CatalogModule {}
