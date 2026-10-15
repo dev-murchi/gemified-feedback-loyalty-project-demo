@@ -26,6 +26,7 @@ npm run start:dev        # API with watch mode, http://localhost:3000
 DEMO_DATA=true npm run start:dev   # same, with the public demo catalog loaded
 JWT_PRIVATE_KEY="$(…)" JWT_KEY_ID=k1 npm run start:dev   # fixed signing key (see .env.example); without it a key is generated per process outside production
 RAW_TEXT_KEY="$(openssl rand -base64 32)" RAW_TEXT_KEY_ID=k1 npm run start:dev   # fixed raw-text key; without it one is generated per process outside production
+LLM_DRIVER=openai OPENAI_API_KEY=… OPENAI_MODEL=… npm run start:dev   # real provider; without LLM_DRIVER the demo stand-in labels everything valid
 npm run verify           # every quality gate, same as CI
 ```
 
@@ -69,6 +70,8 @@ src/
     authentication.module.ts # the Authenticator behind BearerAuthGuard, over AuthenticateRequest
     wallet-http.module.ts  # GET /v1/me/wallet: Gamification's controller behind the guard
     feedback.module.ts     # Feedback wiring: repositories, raw-text cipher and key, use cases, controller
+    analysis.module.ts     # Analysis wiring: repository, analyzer from LLM_DRIVER, ProcessAnalysisJob, UnanalyzedReport
+    sentiment-analyzer-driver.ts # LLM_DRIVER: openai or the demo fake (refused in production)
     configure-app.ts       # HTTP set-up shared by main.api.ts and the e2e tests
     event-routes.ts        # the only place event routes are registered; freezes the router
     event-routes.module.ts # runs event-routes.ts during start-up
@@ -102,15 +105,23 @@ src/
       adapters/
         inbound/http/        # FeedbackController (POST /v1/feedbacks, GET /v1/feedbacks/{id}), Zod schema
         outbound/            # memory repositories, LocalRawTextCipher, raw-text key, NodeHasher
-      public/                # FeedbackSubmitted, FeedbackValidated
-    analysis/                # domain/events/feedback-analyzed.ts; public/ (FeedbackAnalyzed, UnanalyzedReport)
+      public/                # FeedbackSubmitted, FeedbackValidated, RawTextSource
+    analysis/
+      domain/                # sentiment, spam-reason; pre-check/ (PreChecks, PreCheckRules), masking/ (PiiMasker,
+                             # MaskedText, checksums), retry/ (RetryPolicy), feedback-analysis/ (FeedbackAnalysis,
+                             # results, parseLlmOutput), events/feedback-analyzed.ts
+      application/           # ports/ (FeedbackAnalysisRepository, SentimentAnalyzer, BudgetGuard),
+                             # use-cases/ (ProcessAnalysisJob, ReportUnanalyzed)
+      adapters/outbound/     # memory repository, NoBudgetGuard, openai/ (adapter, config), fake/ (demo analyzer),
+                             # prompts/feedback-analysis-v1.ts
+      public/                # FeedbackAnalyzed, UnanalyzedReport
     catalog/
       domain/                # sector, geo-point, topic-key; brand/, branch/ (QrCode, QrToken), label-set/
       application/           # ports/ (repositories), use-cases/ (ResolveQr, ProvideLabelSet, RevokeQrCode)
       adapters/
         inbound/demo/        # demo catalog definition, generated snapshot, loader
         outbound/            # memory-*.repository.ts
-      public/                # QrResolver, BranchDirectory, LabelSetProvider, CatalogSector
+      public/                # QrResolver, BranchDirectory, LabelSetProvider, CatalogSector, isCatalogSector
     gamification/
       domain/                # level-policy, reward-amounts; wallet/ (Wallet, LedgerEntry, ledger-access)
       application/           # ports/ (WalletRepository), use-cases/ (OpenWallet, AwardReward, GetWallet,
@@ -122,8 +133,8 @@ src/
 scripts/                   # check-mock.ts, generate-demo-catalog.ts
 test/
   support/                 # fakes, builders, in-memory harnesses
-  unit/                    # shared-kernel/, catalog/, feedback/, gamification/, identity/, platform/, composition/
-  contract/                # support/ (generic contracts), catalog/, feedback/, gamification/, identity/
+  unit/                    # shared-kernel/, analysis/, catalog/, feedback/, gamification/, identity/, platform/, composition/
+  contract/                # support/ (generic contracts), analysis/, catalog/, feedback/, gamification/, identity/
   e2e/                     # the real AppModule over HTTP; global-setup.ts bundles the contract, setup.ts
                            # checks every response against it
 ```
@@ -253,40 +264,45 @@ Use cases and ports are plain TypeScript; they are wired into NestJS in `composi
 
 ## Decisions made during development
 
-| Decision                                                                                           | Reason                                                                                                                                                                                     |
-| -------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| ESM project (`"type": "module"`, `module: nodenext`)                                               | NestJS 12 is ESM-only                                                                                                                                                                      |
-| Vitest instead of Jest (`docs/07` v1.1, `docs/04` v1.3)                                            | Native ESM support                                                                                                                                                                         |
-| Vitest 5 rather than the 4.1 generated by `nest new`                                               | npm 10 crashes resolving Vitest 4.1's optional peer dependencies                                                                                                                           |
-| ESLint + typescript-eslint rather than the oxlint generated by `nest new`                          | `docs/07` §8; type-aware rules such as `no-floating-promises`                                                                                                                              |
-| TypeScript `~6.0`                                                                                  | typescript-eslint 8.71 supports TypeScript < 6.1                                                                                                                                           |
-| Node ≥ 22.22.3                                                                                     | Required by `@angular-devkit/schematics`, used by `@nestjs/schematics`                                                                                                                     |
-| `postgres:14-alpine`, `redis:7.2-alpine`                                                           | Images already available on the development machine. PostgreSQL 14 reaches end of life in November 2026; upgrading is a one-line change. Redis runs with `noeviction` for BullMQ (ADR-011) |
-| dependency-cruiser `shared-kernel-is-pure` (`docs/07` v1.1)                                        | Every domain imports the shared kernel, so its purity protects all of them                                                                                                                 |
-| Prism runs from the `stoplight/prism:5.15.10` Docker image, not npm                                | Prism ≥ 5.15.7 needs Node ≥ 24.14; the image keeps it out of our dependencies and `npm audit`. The image is amd64-only, so it runs under emulation on Apple Silicon                        |
-| Prism started with `-m false`                                                                      | Prism 5.15.10 crashes in its default multiprocess mode                                                                                                                                     |
-| QR tokens are 16 random bytes (22 base64url characters)                                            | The FR-QR-01 minimum (128 bits); shortest QR content                                                                                                                                       |
-| Demo QR codes are a committed snapshot, restored with `Branch.reconstitute`                        | Printed QR codes must stay valid across restarts and the PostgreSQL switch; `Branch.issueQrCode` stays the only way to make a token                                                        |
-| `tsx` runs TypeScript scripts (`npm run demo:snapshot`)                                            | Plain Node cannot resolve our `./x.js` imports to `.ts` files                                                                                                                              |
-| Composition wires use cases with factory providers and symbol tokens (`src/composition/tokens.ts`) | No dependence on decorator metadata (`docs/07` §2)                                                                                                                                         |
-| S0-06 (Gamification) before S0-05 (Identity)                                                       | Owner decision: every user has a wallet from the moment they exist; the publishers' event contracts are written first                                                                      |
-| `fast-check` for TC-GAM-04                                                                         | Generates and shrinks operation sequences; the seed is printed on failure                                                                                                                  |
-| Each ledger entry stores `xpTotalAfter` (SDD v1.2)                                                 | A feedback's level-up is derived from a fact that never changes                                                                                                                            |
-| A ledger entry's earning date is the feedback's `submittedAt`                                      | Points expiry counts from the customer's visit, and it is identical across retries                                                                                                         |
-| Only the named ledger-key constraint maps to `ConcurrencyConflictError`                            | A duplicate reward key is a concurrency symptom; every other unique violation is an infrastructure error                                                                                   |
-| Development attestation: a made-up envelope with real P-256 / ES256 proof of possession            | The same cryptographic path as production; both development verifiers refuse `NODE_ENV=production`                                                                                         |
-| `jose` for ES256 access tokens; key from `JWT_PRIVATE_KEY` and `JWT_KEY_ID`                        | Only ES256 and our `kid` are accepted; a key is generated outside production and required in production                                                                                    |
-| Zod 4 validates request format at the HTTP edge only                                               | Strict objects mirror `additionalProperties: false`; meaning stays in the domain                                                                                                           |
-| Identity's `SessionWalletReader`, answered in the composition root                                 | Identity depends on no other context, so there is no context cycle                                                                                                                         |
-| Waiting challenges are capped (10 000)                                                             | The challenge endpoint needs no login; the trade-off is recorded in `docs/08` S0-10                                                                                                        |
-| `ajv` and `ajv-formats` as devDependencies; Redocly bundles the contract                           | Real responses are checked against `openapi.yaml` in every e2e test without a YAML parser                                                                                                  |
-| Contexts under `src/contexts/`                                                                     | Rules match contexts by path; shared folders (`shared-kernel/`, `platform/`, `composition/`) never need exceptions                                                                         |
-| The proof and the fingerprint are taken over the raw body bytes                                    | Re-serialized JSON can differ from what the device signed (spaces, key order)                                                                                                              |
-| `Idempotent-Replayed` is always sent (`true` or `false`)                                           | The contract documents it as a boolean header on every 202                                                                                                                                 |
-| `qrCodeId` is a plain string in Feedback                                                           | Feedback's domain may not import Catalog's types                                                                                                                                           |
-| An unreadable raw text is thrown (`RawTextUnreadableError`), not a domain error                    | An integrity failure with no API code (`docs/07` §6); owner decision A                                                                                                                     |
-| The unique pair (user, Idempotency-Key) is an infrastructure error, not a conflict                 | `docs/07` v1.13 maps only two constraints; the replay lookup and the cooldown's version already catch races                                                                                |
-| Analysis is asked before the 24-hour close's transaction                                           | No outside call inside a unit of work; a retry reuses the answer                                                                                                                           |
+| Decision                                                                                                                       | Reason                                                                                                                                                                                     |
+| ------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| ESM project (`"type": "module"`, `module: nodenext`)                                                                           | NestJS 12 is ESM-only                                                                                                                                                                      |
+| Vitest instead of Jest (`docs/07` v1.1, `docs/04` v1.3)                                                                        | Native ESM support                                                                                                                                                                         |
+| Vitest 5 rather than the 4.1 generated by `nest new`                                                                           | npm 10 crashes resolving Vitest 4.1's optional peer dependencies                                                                                                                           |
+| ESLint + typescript-eslint rather than the oxlint generated by `nest new`                                                      | `docs/07` §8; type-aware rules such as `no-floating-promises`                                                                                                                              |
+| TypeScript `~6.0`                                                                                                              | typescript-eslint 8.71 supports TypeScript < 6.1                                                                                                                                           |
+| Node ≥ 22.22.3                                                                                                                 | Required by `@angular-devkit/schematics`, used by `@nestjs/schematics`                                                                                                                     |
+| `postgres:14-alpine`, `redis:7.2-alpine`                                                                                       | Images already available on the development machine. PostgreSQL 14 reaches end of life in November 2026; upgrading is a one-line change. Redis runs with `noeviction` for BullMQ (ADR-011) |
+| dependency-cruiser `shared-kernel-is-pure` (`docs/07` v1.1)                                                                    | Every domain imports the shared kernel, so its purity protects all of them                                                                                                                 |
+| Prism runs from the `stoplight/prism:5.15.10` Docker image, not npm                                                            | Prism ≥ 5.15.7 needs Node ≥ 24.14; the image keeps it out of our dependencies and `npm audit`. The image is amd64-only, so it runs under emulation on Apple Silicon                        |
+| Prism started with `-m false`                                                                                                  | Prism 5.15.10 crashes in its default multiprocess mode                                                                                                                                     |
+| QR tokens are 16 random bytes (22 base64url characters)                                                                        | The FR-QR-01 minimum (128 bits); shortest QR content                                                                                                                                       |
+| Demo QR codes are a committed snapshot, restored with `Branch.reconstitute`                                                    | Printed QR codes must stay valid across restarts and the PostgreSQL switch; `Branch.issueQrCode` stays the only way to make a token                                                        |
+| `tsx` runs TypeScript scripts (`npm run demo:snapshot`)                                                                        | Plain Node cannot resolve our `./x.js` imports to `.ts` files                                                                                                                              |
+| Composition wires use cases with factory providers and symbol tokens (`src/composition/tokens.ts`)                             | No dependence on decorator metadata (`docs/07` §2)                                                                                                                                         |
+| S0-06 (Gamification) before S0-05 (Identity)                                                                                   | Owner decision: every user has a wallet from the moment they exist; the publishers' event contracts are written first                                                                      |
+| `fast-check` for TC-GAM-04                                                                                                     | Generates and shrinks operation sequences; the seed is printed on failure                                                                                                                  |
+| Each ledger entry stores `xpTotalAfter` (SDD v1.2)                                                                             | A feedback's level-up is derived from a fact that never changes                                                                                                                            |
+| A ledger entry's earning date is the feedback's `submittedAt`                                                                  | Points expiry counts from the customer's visit, and it is identical across retries                                                                                                         |
+| Only the named ledger-key constraint maps to `ConcurrencyConflictError`                                                        | A duplicate reward key is a concurrency symptom; every other unique violation is an infrastructure error                                                                                   |
+| Development attestation: a made-up envelope with real P-256 / ES256 proof of possession                                        | The same cryptographic path as production; both development verifiers refuse `NODE_ENV=production`                                                                                         |
+| `jose` for ES256 access tokens; key from `JWT_PRIVATE_KEY` and `JWT_KEY_ID`                                                    | Only ES256 and our `kid` are accepted; a key is generated outside production and required in production                                                                                    |
+| Zod 4 validates request format at the HTTP edge only                                                                           | Strict objects mirror `additionalProperties: false`; meaning stays in the domain                                                                                                           |
+| Identity's `SessionWalletReader`, answered in the composition root                                                             | Identity depends on no other context, so there is no context cycle                                                                                                                         |
+| Waiting challenges are capped (10 000)                                                                                         | The challenge endpoint needs no login; the trade-off is recorded in `docs/08` S0-10                                                                                                        |
+| `ajv` and `ajv-formats` as devDependencies; Redocly bundles the contract                                                       | Real responses are checked against `openapi.yaml` in every e2e test without a YAML parser                                                                                                  |
+| Contexts under `src/contexts/`                                                                                                 | Rules match contexts by path; shared folders (`shared-kernel/`, `platform/`, `composition/`) never need exceptions                                                                         |
+| The proof and the fingerprint are taken over the raw body bytes                                                                | Re-serialized JSON can differ from what the device signed (spaces, key order)                                                                                                              |
+| `Idempotent-Replayed` is always sent (`true` or `false`)                                                                       | The contract documents it as a boolean header on every 202                                                                                                                                 |
+| `qrCodeId` is a plain string in Feedback                                                                                       | Feedback's domain may not import Catalog's types                                                                                                                                           |
+| An unreadable raw text is thrown (`RawTextUnreadableError`), not a domain error                                                | An integrity failure with no API code (`docs/07` §6); owner decision A                                                                                                                     |
+| The unique pair (user, Idempotency-Key) is an infrastructure error, not a conflict                                             | `docs/07` v1.13 maps only two constraints; the replay lookup and the cooldown's version already catch races                                                                                |
+| Analysis is asked before the 24-hour close's transaction                                                                       | No outside call inside a unit of work; a retry reuses the answer                                                                                                                           |
+| The prompt lives in `src/contexts/analysis/adapters/outbound/prompts/feedback-analysis-v1.ts`, not `prompts/` (owner decision) | It ships with the build, the version is explicit, and no file is loaded at start-up                                                                                                        |
+| The OpenAI adapter uses plain `fetch`, no SDK                                                                                  | No new dependency; the strict JSON schema is a few lines                                                                                                                                   |
+| Error statuses other than 408/409/429/5xx throw instead of `unavailable`                                                       | A wrong key or model must never look like an outage that earns a 24-hour reward                                                                                                            |
+| Pre-checks are narrow (owner decision A)                                                                                       | A spam verdict costs the user the attempt; terse real complaints go to the LLM                                                                                                             |
+| `FeedbackAnalyzed` carries no spam reason                                                                                      | It is kept in Analysis for quality monitoring only (SDD 6.1)                                                                                                                               |
 
 ## Known gaps
 
@@ -295,5 +311,10 @@ Use cases and ports are plain TypeScript; they are wired into NestJS in `composi
 - The attestation is a development stand-in. The real Apple and Google verifiers come later, so the application cannot start in production yet.
 - The challenge store is in memory and single-process; per-IP rate limiting is S0-10.
 - The in-memory unit of work runs one request at a time, so TC-QR-01 never produces a real conflict in memory; the conflict path is tested with a scripted repository, and the real race against PostgreSQL in S0-11.
-- `FinalizeUnanalyzedFeedback` has no caller yet; the sweeper that runs it is S0-10. `UnanalyzedReport` has no implementation until S0-08.
+- Nothing runs `ProcessAnalysisJob` or `FinalizeUnanalyzedFeedback` yet: the outbox relay, the queue, the worker and the 24-hour sweeper are S0-10 (the sweeper is wired in its own module, because it needs Feedback and Analysis together).
 - The platform proof is a development stand-in, like the attestation.
+- The customer demo must run with `LLM_DRIVER=openai`; the stand-in is for development only (SDD 11.1 shows real spam and prompt-injection labelling).
+- Anthropic adapter (Should, ADR-018) not built; cut line, `docs/08` §4.
+- No budget guard and no cost in money yet (`NoBudgetGuard`, SDD 11.1); token counts are stored, and `cost_micro_usd` must be added before S0-13 (NFR-COST-01).
+- The OpenAI request sets no `max_completion_tokens` and no temperature yet; both are set once S0-13 has chosen the model.
+- SDD 8.1 still names `prompts/feedback-analysis/v1` as the prompt location (next docs pass).

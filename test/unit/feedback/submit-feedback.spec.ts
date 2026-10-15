@@ -250,13 +250,16 @@ describe('SubmitFeedback', () => {
     it.each([
       ['TEXT_TOO_SHORT', 'kısa'],
       ['TEXT_TOO_LONG', 'x'.repeat(1001)],
-    ])('rejects a text as %s (FR-AI-01)', async (code, text) => {
-      const result = await fixture.submit.execute(aSubmission({ text }));
+    ])(
+      'rejects a text as %s (FR-AI-01, TC-AI-01: nothing is saved, so no analysis job and no LLM call)',
+      async (code, text) => {
+        const result = await fixture.submit.execute(aSubmission({ text }));
 
-      expect(errorOf(result)?.code).toBe(code);
-      await expectNothingStored();
-      expect(await cooldown()).toBeUndefined();
-    });
+        expect(errorOf(result)?.code).toBe(code);
+        await expectNothingStored();
+        expect(await cooldown()).toBeUndefined();
+      },
+    );
 
     it('rejects an unknown or revoked QR token as QR_INVALID (FR-QR-02, TC-QR-07)', async () => {
       fixture.qrCodes.revoked.add(QR_TOKEN);
