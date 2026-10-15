@@ -34,3 +34,11 @@ export const FEEDBACK_REPOSITORY = Symbol('FeedbackRepository');
 export const REWARD_COOLDOWN_REPOSITORY = Symbol('RewardCooldownRepository');
 export const RAW_TEXT_CIPHER = Symbol('RawTextCipher');
 export const APPLY_ANALYSIS_RESULT = Symbol('ApplyAnalysisResult');
+export const RAW_TEXT_SOURCE = Symbol('RawTextSource');
+
+export const FEEDBACK_ANALYSIS_REPOSITORY = Symbol(
+  'FeedbackAnalysisRepository',
+);
+export const SENTIMENT_ANALYZER = Symbol('SentimentAnalyzer');
+export const PROCESS_ANALYSIS_JOB = Symbol('ProcessAnalysisJob');
+export const UNANALYZED_REPORT = Symbol('UnanalyzedReport');

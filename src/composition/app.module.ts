@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { AnalysisModule } from './analysis.module.js';
 import { PersistenceModule } from './persistence.module.js';
 import { CatalogModule } from './catalog.module.js';
 import { GamificationModule } from './gamification.module.js';
@@ -16,6 +17,7 @@ import { WalletHttpModule } from './wallet-http.module.js';
     IdentityModule,
     WalletHttpModule,
     FeedbackModule,
+    AnalysisModule,
     EventRoutesModule,
   ],
 })

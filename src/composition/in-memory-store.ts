@@ -1,3 +1,4 @@
+import type { FeedbackAnalysisRow } from '../contexts/analysis/adapters/outbound/memory-feedback-analysis.repository.js';
 import type { BrandRow } from '../contexts/catalog/adapters/outbound/memory-brand.repository.js';
 import type { BranchRow } from '../contexts/catalog/adapters/outbound/memory-branch.repository.js';
 import type { FeedbackRow } from '../contexts/feedback/adapters/outbound/memory-feedback.repository.js';
@@ -32,6 +33,10 @@ export interface FeedbackTables {
   readonly cooldowns: InMemoryTable<string, RewardCooldownRow>;
 }
 
+export interface AnalysisTables {
+  readonly analyses: InMemoryTable<string, FeedbackAnalysisRow>;
+}
+
 export interface GamificationTables {
   readonly wallets: InMemoryTable<string, WalletRow>;
   readonly ledger: InMemoryTable<string, LedgerRow>;
@@ -47,9 +52,40 @@ export interface InMemoryStore {
   readonly ids: IdGenerator;
   readonly catalog: CatalogTables;
   readonly feedback: FeedbackTables;
+  readonly analysis: AnalysisTables;
   readonly gamification: GamificationTables;
   readonly identity: IdentityTables;
 }
+
+/** Every context's tables, one store per context. */
+type ContextTables = Pick<
+  InMemoryStore,
+  'catalog' | 'feedback' | 'analysis' | 'gamification' | 'identity'
+>;
+
+// `satisfies` keeps the literal types, so Object.values in createInMemoryStore is typed and every
+// table of a context automatically takes part in rollback.
+const createTables = (): ContextTables => ({
+  catalog: {
+    brands: new InMemoryTable<string, BrandRow>(),
+    branches: new InMemoryTable<string, BranchRow>(),
+    labelSets: new InMemoryTable<string, LabelSetRow>(),
+  } satisfies CatalogTables,
+  feedback: {
+    feedbacks: new InMemoryTable<string, FeedbackRow>(),
+    cooldowns: new InMemoryTable<string, RewardCooldownRow>(),
+  } satisfies FeedbackTables,
+  analysis: {
+    analyses: new InMemoryTable<string, FeedbackAnalysisRow>(),
+  } satisfies AnalysisTables,
+  gamification: {
+    wallets: new InMemoryTable<string, WalletRow>(),
+    ledger: new InMemoryTable<string, LedgerRow>(),
+  } satisfies GamificationTables,
+  identity: {
+    users: new InMemoryTable<string, UserRow>(),
+  } satisfies IdentityTables,
+});
 
 /**
  * `routes` is the application's EventRouter, created first and filled after wiring. The clock is the
@@ -60,35 +96,15 @@ export function createInMemoryStore(
   clock: Clock = new SystemClock(),
 ): InMemoryStore {
   const ids = new RandomIdGenerator();
-  // `satisfies` keeps the literal types, so Object.values below is typed and every table of a
-  // context automatically takes part in rollback.
-  const catalog = {
-    brands: new InMemoryTable<string, BrandRow>(),
-    branches: new InMemoryTable<string, BranchRow>(),
-    labelSets: new InMemoryTable<string, LabelSetRow>(),
-  } satisfies CatalogTables;
-  const gamification = {
-    wallets: new InMemoryTable<string, WalletRow>(),
-    ledger: new InMemoryTable<string, LedgerRow>(),
-  } satisfies GamificationTables;
-  const feedback = {
-    feedbacks: new InMemoryTable<string, FeedbackRow>(),
-    cooldowns: new InMemoryTable<string, RewardCooldownRow>(),
-  } satisfies FeedbackTables;
-  const identity = {
-    users: new InMemoryTable<string, UserRow>(),
-  } satisfies IdentityTables;
+  const tables = createTables();
   const uow = new InMemoryUnitOfWork({
     routes,
-    tables: [
-      ...Object.values(catalog),
-      ...Object.values(feedback),
-      ...Object.values(gamification),
-      ...Object.values(identity),
-    ],
+    tables: Object.values(tables).flatMap((context: object) =>
+      Object.values(context as Record<string, InMemoryTable<string, unknown>>),
+    ),
     outbox: new InMemoryTable<string, OutboxRecord>(),
     clock,
     ids,
   });
-  return { uow, clock, ids, catalog, feedback, gamification, identity };
+  return { uow, clock, ids, ...tables };
 }

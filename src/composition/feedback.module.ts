@@ -15,6 +15,7 @@ import type { FeedbackRepository } from '../contexts/feedback/application/ports/
 import type { RawTextCipher } from '../contexts/feedback/application/ports/raw-text-cipher.js';
 import type { RewardCooldownRepository } from '../contexts/feedback/application/ports/reward-cooldown-repository.js';
 import { ApplyAnalysisResult } from '../contexts/feedback/application/use-cases/apply-analysis-result.js';
+import { ReadRawText } from '../contexts/feedback/application/use-cases/read-raw-text.js';
 import { GetFeedbackStatus } from '../contexts/feedback/application/use-cases/get-feedback-status.js';
 import { SubmitFeedback } from '../contexts/feedback/application/use-cases/submit-feedback.js';
 import { DEFAULT_REWARD_LIMITS } from '../contexts/feedback/domain/reward-cooldown/reward-limits.js';
@@ -36,6 +37,7 @@ import {
   PLATFORM_PROOF_VERIFIER,
   QR_RESOLVER,
   RAW_TEXT_CIPHER,
+  RAW_TEXT_SOURCE,
   REWARD_COOLDOWN_REPOSITORY,
   REWARD_LOOKUP,
 } from './tokens.js';
@@ -45,7 +47,7 @@ const random = new CryptoRandomSource();
 /**
  * Feedback wiring (in-memory until S0-11). The raw-text master key comes from RAW_TEXT_KEY and
  * RAW_TEXT_KEY_ID and is required in production. Exports ApplyAnalysisResult, which only
- * event-routes.ts registers; the repositories stay inside the module.
+ * event-routes.ts registers, and RawTextSource for Analysis; the repositories stay inside.
  */
 @Module({
   imports: [
@@ -137,6 +139,12 @@ const random = new CryptoRandomSource();
       ) => new GetFeedbackStatus({ feedbacks, branches, rewards }),
     },
     {
+      provide: RAW_TEXT_SOURCE,
+      inject: [FEEDBACK_REPOSITORY, RAW_TEXT_CIPHER],
+      useFactory: (feedbacks: FeedbackRepository, cipher: RawTextCipher) =>
+        new ReadRawText({ feedbacks, cipher }),
+    },
+    {
       provide: APPLY_ANALYSIS_RESULT,
       inject: [FEEDBACK_REPOSITORY, REWARD_COOLDOWN_REPOSITORY],
       useFactory: (
@@ -145,6 +153,6 @@ const random = new CryptoRandomSource();
       ) => new ApplyAnalysisResult({ feedbacks, cooldowns }),
     },
   ],
-  exports: [APPLY_ANALYSIS_RESULT],
+  exports: [APPLY_ANALYSIS_RESULT, RAW_TEXT_SOURCE],
 })
 export class FeedbackModule {}
