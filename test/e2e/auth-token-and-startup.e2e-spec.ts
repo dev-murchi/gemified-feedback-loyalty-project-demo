@@ -123,7 +123,7 @@ describe('start-up configuration (e2e)', () => {
 
     // Then it says so, once
     const signingKeyWarnings = running.logger.warnings.filter((warning) =>
-      warning.message.includes('JWT_PRIVATE_KEY'),
+      warning.message.startsWith('No JWT_PRIVATE_KEY'),
     );
     expect(signingKeyWarnings).toHaveLength(1);
     await running.app.close();

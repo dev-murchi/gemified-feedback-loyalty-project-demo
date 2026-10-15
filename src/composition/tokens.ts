@@ -42,3 +42,9 @@ export const FEEDBACK_ANALYSIS_REPOSITORY = Symbol(
 export const SENTIMENT_ANALYZER = Symbol('SentimentAnalyzer');
 export const PROCESS_ANALYSIS_JOB = Symbol('ProcessAnalysisJob');
 export const UNANALYZED_REPORT = Symbol('UnanalyzedReport');
+
+export const B2B_CLIENT_REPOSITORY = Symbol('B2bClientRepository');
+export const SECRET_HASHER = Symbol('SecretHasher');
+export const B2B_ACCESS_TOKENS = Symbol('B2bAccessTokens');
+export const REPORTING_QUERIES = Symbol('ReportingQueries');
+export const DEMO_B2B_CLIENTS = Symbol('DemoB2bClients');

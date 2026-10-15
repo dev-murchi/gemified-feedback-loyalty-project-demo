@@ -49,21 +49,35 @@ const mediaTypeOf = (headers: Readonly<Record<string, unknown>>): string =>
 /**
  * A response must carry no property its schema does not declare. JSON Schema allows extras by
  * default, which would let an accidental leak (an internal field) pass; the contract's objects are
- * closed in practice, so the check closes them.
+ * closed in practice, so the check closes them. An `allOf` is closed as a whole
+ * (`unevaluatedProperties: false`), because closing each branch would reject what another adds.
  */
-function closed(schema: unknown): unknown {
-  if (Array.isArray(schema)) return schema.map(closed);
+/** An object schema that declares properties and says nothing about extra ones. */
+const isOpenObject = (schema: Record<string, unknown>): boolean =>
+  schema['type'] === 'object' &&
+  schema['properties'] !== undefined &&
+  ['additionalProperties', 'oneOf', 'anyOf'].every(
+    (key) => schema[key] === undefined,
+  );
+
+function closed(schema: unknown, inAllOf = false): unknown {
+  if (Array.isArray(schema)) return schema.map((item) => closed(item, inAllOf));
   if (typeof schema !== 'object' || schema === null) return schema;
   const copy = Object.fromEntries(
-    Object.entries(schema).map(([key, value]) => [key, closed(value)]),
+    Object.entries(schema).map(([key, value]) => [
+      key,
+      // The branches of an allOf add up: each stays open, the allOf itself is closed below.
+      closed(value, key === 'allOf'),
+    ]),
   ) as Record<string, unknown>;
-  const isPlainObject =
-    copy['type'] === 'object' &&
-    copy['properties'] !== undefined &&
-    copy['additionalProperties'] === undefined &&
-    copy['oneOf'] === undefined &&
-    copy['anyOf'] === undefined;
-  return isPlainObject ? { ...copy, additionalProperties: false } : copy;
+  if (
+    copy['allOf'] !== undefined &&
+    copy['unevaluatedProperties'] === undefined
+  )
+    return { ...copy, unevaluatedProperties: false };
+  return !inAllOf && isOpenObject(copy)
+    ? { ...copy, additionalProperties: false }
+    : copy;
 }
 
 export class Contract {

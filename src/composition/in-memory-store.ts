@@ -1,4 +1,5 @@
 import type { FeedbackAnalysisRow } from '../contexts/analysis/adapters/outbound/memory-feedback-analysis.repository.js';
+import type { B2bClientRow } from '../contexts/insights/adapters/outbound/memory-b2b-client.repository.js';
 import type { BrandRow } from '../contexts/catalog/adapters/outbound/memory-brand.repository.js';
 import type { BranchRow } from '../contexts/catalog/adapters/outbound/memory-branch.repository.js';
 import type { FeedbackRow } from '../contexts/feedback/adapters/outbound/memory-feedback.repository.js';
@@ -37,6 +38,10 @@ export interface AnalysisTables {
   readonly analyses: InMemoryTable<string, FeedbackAnalysisRow>;
 }
 
+export interface InsightsTables {
+  readonly b2bClients: InMemoryTable<string, B2bClientRow>;
+}
+
 export interface GamificationTables {
   readonly wallets: InMemoryTable<string, WalletRow>;
   readonly ledger: InMemoryTable<string, LedgerRow>;
@@ -53,6 +58,7 @@ export interface InMemoryStore {
   readonly catalog: CatalogTables;
   readonly feedback: FeedbackTables;
   readonly analysis: AnalysisTables;
+  readonly insights: InsightsTables;
   readonly gamification: GamificationTables;
   readonly identity: IdentityTables;
 }
@@ -60,7 +66,7 @@ export interface InMemoryStore {
 /** Every context's tables, one store per context. */
 type ContextTables = Pick<
   InMemoryStore,
-  'catalog' | 'feedback' | 'analysis' | 'gamification' | 'identity'
+  'catalog' | 'feedback' | 'analysis' | 'insights' | 'gamification' | 'identity'
 >;
 
 // `satisfies` keeps the literal types, so Object.values in createInMemoryStore is typed and every
@@ -78,6 +84,9 @@ const createTables = (): ContextTables => ({
   analysis: {
     analyses: new InMemoryTable<string, FeedbackAnalysisRow>(),
   } satisfies AnalysisTables,
+  insights: {
+    b2bClients: new InMemoryTable<string, B2bClientRow>(),
+  } satisfies InsightsTables,
   gamification: {
     wallets: new InMemoryTable<string, WalletRow>(),
     ledger: new InMemoryTable<string, LedgerRow>(),

@@ -25,5 +25,7 @@ export function configureHttp(
   app.disable('x-powered-by');
   app.use(requestIdMiddleware(deps.ids));
   app.useBodyParser('json', { limit: MAX_BODY });
+  // The OAuth2 token endpoint takes application/x-www-form-urlencoded (RFC 6749 §4.4).
+  app.useBodyParser('urlencoded', { limit: MAX_BODY, extended: false });
   app.useGlobalFilters(new ProblemFilter(deps.logger));
 }
