@@ -215,7 +215,7 @@ Yalnızca bir tüketicisi olan olaylar tanımlanır; kullanılmayan olay yazılm
 | --- | --- | --- | --- | --- |
 | `UserRegistered` | Identity | Gamification | Senkron, aynı unit of work | `userId`, `occurredAt` |
 | `FeedbackSubmitted` | Feedback | Analysis | Asenkron: outbox → kuyruk | `feedbackId`, `branchId`, `sector`, `submittedAt`, `correlationId` |
-| `FeedbackAnalyzed` | Analysis | Feedback | Senkron, aynı unit of work | `feedbackId`, `verdict` (geçerli/spam), `maskedText`, `sentiment`, `topicKey`, `analyzedAt` |
+| `FeedbackAnalyzed` | Analysis | Feedback | Senkron, aynı unit of work | `feedbackId`, `verdict` (geçerli/spam), `maskedText`, `sentiment` ve `topicKey` (AI dışı ön kontrolde spam sayılan yorumda boş), `analyzedAt` |
 | `FeedbackValidated` | Feedback | Gamification | Senkron, aynı unit of work | `feedbackId`, `userId`, `submittedAt`, `rewardEligible` |
 
 **Kurallar:**

@@ -19,8 +19,12 @@ export interface FeedbackAnalyzed extends DomainEvent<'FeedbackAnalyzed'> {
   readonly verdict: 'valid' | 'spam';
   /** The comment with personal data replaced by placeholders. */
   readonly maskedText: string;
-  readonly sentiment: AnalyzedSentiment;
-  /** A key from the branch sector's versioned topic list (FR-AI-04). */
-  readonly topicKey: string;
+  /**
+   * Null only for spam found by the AI-free pre-checks, which never reach the LLM (owner decision
+   * of S0-08); a valid verdict always has a sentiment.
+   */
+  readonly sentiment: AnalyzedSentiment | null;
+  /** A key from the branch sector's versioned topic list (FR-AI-04); null like `sentiment`. */
+  readonly topicKey: string | null;
   readonly analyzedAt: Date;
 }
