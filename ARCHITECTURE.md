@@ -25,6 +25,7 @@ docker compose up -d     # PostgreSQL and Redis (not used by the app yet)
 npm run start:dev        # API with watch mode, http://localhost:3000
 DEMO_DATA=true npm run start:dev   # same, with the public demo catalog loaded
 JWT_PRIVATE_KEY="$(…)" JWT_KEY_ID=k1 npm run start:dev   # fixed signing key (see .env.example); without it a key is generated per process outside production
+RAW_TEXT_KEY="$(openssl rand -base64 32)" RAW_TEXT_KEY_ID=k1 npm run start:dev   # fixed raw-text key; without it one is generated per process outside production
 npm run verify           # every quality gate, same as CI
 ```
 
@@ -67,6 +68,7 @@ src/
     identity.module.ts     # Identity wiring: dev verifiers, signing key, tokens, use cases, controllers
     authentication.module.ts # the Authenticator behind BearerAuthGuard, over AuthenticateRequest
     wallet-http.module.ts  # GET /v1/me/wallet: Gamification's controller behind the guard
+    feedback.module.ts     # Feedback wiring: repositories, raw-text cipher and key, use cases, controller
     configure-app.ts       # HTTP set-up shared by main.api.ts and the e2e tests
     event-routes.ts        # the only place event routes are registered; freezes the router
     event-routes.module.ts # runs event-routes.ts during start-up
@@ -78,7 +80,7 @@ src/
                            # RandomIdGenerator, CryptoRandomSource, ConsoleLogger
   platform/
     http/                  # error-codes (status table, titles), problem-details, problem-exception,
-                           # problem.filter, request-id, bearer-auth.guard, configure-http, parse-body
+                           # problem.filter, request-id, bearer-auth.guard, configure-http, parse-body, raw-body
   contexts/
     identity/
       domain/                # challenge/ (Nonce, Challenge), user/ (User, DeviceKey, trust level, key values),
@@ -89,15 +91,26 @@ src/
       adapters/
         inbound/http/        # challenge and session controllers, Zod schemas, SessionWalletReader
         outbound/            # memory user repository and challenge store, dev verifiers, jose tokens, signing key
-      public/                # UserRegistered
-    feedback/                # domain/events/feedback-validated.ts; public/ re-exports it
+      public/                # UserRegistered, PlatformProofVerifier
+    feedback/
+      domain/                # feedback-text, idempotency-key, request-fingerprint; feedback/ (Feedback, status,
+                             # raw text, errors), reward-cooldown/ (RewardCooldown, RewardLimits, rejections),
+                             # events/ (FeedbackSubmitted, FeedbackValidated)
+      application/           # ports/ (FeedbackRepository, RewardCooldownRepository, RawTextCipher, Hasher),
+                             # use-cases/ (SubmitFeedback, GetFeedbackStatus, ApplyAnalysisResult,
+                             # FinalizeUnanalyzedFeedback), save-closed-feedback
+      adapters/
+        inbound/http/        # FeedbackController (POST /v1/feedbacks, GET /v1/feedbacks/{id}), Zod schema
+        outbound/            # memory repositories, LocalRawTextCipher, raw-text key, NodeHasher
+      public/                # FeedbackSubmitted, FeedbackValidated
+    analysis/                # domain/events/feedback-analyzed.ts; public/ (FeedbackAnalyzed, UnanalyzedReport)
     catalog/
       domain/                # sector, geo-point, topic-key; brand/, branch/ (QrCode, QrToken), label-set/
       application/           # ports/ (repositories), use-cases/ (ResolveQr, ProvideLabelSet, RevokeQrCode)
       adapters/
         inbound/demo/        # demo catalog definition, generated snapshot, loader
         outbound/            # memory-*.repository.ts
-      public/                # QrResolver, LabelSetProvider, CatalogSector
+      public/                # QrResolver, BranchDirectory, LabelSetProvider, CatalogSector
     gamification/
       domain/                # level-policy, reward-amounts; wallet/ (Wallet, LedgerEntry, ledger-access)
       application/           # ports/ (WalletRepository), use-cases/ (OpenWallet, AwardReward, GetWallet,
@@ -109,8 +122,8 @@ src/
 scripts/                   # check-mock.ts, generate-demo-catalog.ts
 test/
   support/                 # fakes, builders, in-memory harnesses
-  unit/                    # shared-kernel/, catalog/, gamification/, identity/, platform/, composition/
-  contract/                # support/ (generic contracts), catalog/, gamification/, identity/
+  unit/                    # shared-kernel/, catalog/, feedback/, gamification/, identity/, platform/, composition/
+  contract/                # support/ (generic contracts), catalog/, feedback/, gamification/, identity/
   e2e/                     # the real AppModule over HTTP; global-setup.ts bundles the contract, setup.ts
                            # checks every response against it
 ```
@@ -176,16 +189,17 @@ Adapters log through the shared-kernel `Logger` port (`warn(message, fields)`), 
 
 `src/platform/http/` is the shared, framework-bound part of every inbound HTTP adapter. It imports no context (`platform-imports-no-context`); what it needs from a context it defines as an interface, and the composition root implements it.
 
-| File                   | What it does                                                                                                                                                               |
-| ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `error-codes.ts`       | The one table from error code to HTTP status (and the fixed `title`). A test keeps it equal to the contract's catalog and `ErrorCode` enum. 429 is only for `RATE_LIMITED` |
-| `problem-details.ts`   | The `Problem` shape (RFC 9457 plus `code`, `requestId`, `retryAfterSeconds`, `errors`). There is no user-facing message                                                    |
-| `problem-exception.ts` | What a controller throws to end a request; `ProblemException.from(domainError)` keeps the code, the field of a validation error and `retryAfterSeconds`                    |
-| `problem.filter.ts`    | Turns every error into `application/problem+json`. Framework errors map by status; anything unexpected is `INTERNAL_ERROR`, logged with the request id and without details |
-| `request-id.ts`        | `X-Request-Id`: the caller's if plain, else a new one; echoed in the header and in every Problem                                                                           |
-| `bearer-auth.guard.ts` | `mobileBearer`: asks an `Authenticator` (provided by the composition root) who is calling; `@CurrentPrincipal()` hands the caller to the handler                           |
-| `configure-http.ts`    | Request id first, then the 8 KB JSON limit, then the filter; `X-Powered-By` disabled. Shared by `main.api.ts` and the e2e tests                                            |
-| `parse-body.ts`        | Request format validation with Zod; failures become `VALIDATION_ERROR` with the offending fields. Meaning is checked in the domain, not here                               |
+| File                   | What it does                                                                                                                                                                                   |
+| ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `error-codes.ts`       | The one table from error code to HTTP status (and the fixed `title`). A test keeps it equal to the contract's catalog and `ErrorCode` enum. 429 is only for `RATE_LIMITED`                     |
+| `problem-details.ts`   | The `Problem` shape (RFC 9457 plus `code`, `requestId`, `retryAfterSeconds`, `errors`). There is no user-facing message                                                                        |
+| `problem-exception.ts` | What a controller throws to end a request; `ProblemException.from(domainError)` keeps the code, the field of a validation error and `retryAfterSeconds`                                        |
+| `problem.filter.ts`    | Turns every error into `application/problem+json`. Framework errors map by status; anything unexpected is `INTERNAL_ERROR`, logged with the request id and without details                     |
+| `request-id.ts`        | `X-Request-Id`: the caller's if plain, else a new one; echoed in the header and in every Problem                                                                                               |
+| `bearer-auth.guard.ts` | `mobileBearer`: asks an `Authenticator` (provided by the composition root) who is calling; `@CurrentPrincipal()` hands the caller to the handler                                               |
+| `configure-http.ts`    | Request id first, then the 8 KB JSON limit, then the filter; `X-Powered-By` disabled. Shared by `main.api.ts` and the e2e tests                                                                |
+| `parse-body.ts`        | Request format validation with Zod; failures become `VALIDATION_ERROR` with the offending fields. Meaning is checked in the domain, not here                                                   |
+| `raw-body.ts`          | `HTTP_APP_OPTIONS` (no default parser, raw body kept) for every entry point; `rawBodyOf` throws if a parsed body has no raw bytes, so a wiring mistake can never verify proofs against nothing |
 
 Controllers stay thin: parse the body, call one use case, turn an `Err` into a `ProblemException`, and map the result to the contract's JSON.
 
@@ -267,6 +281,12 @@ Use cases and ports are plain TypeScript; they are wired into NestJS in `composi
 | Waiting challenges are capped (10 000)                                                             | The challenge endpoint needs no login; the trade-off is recorded in `docs/08` S0-10                                                                                                        |
 | `ajv` and `ajv-formats` as devDependencies; Redocly bundles the contract                           | Real responses are checked against `openapi.yaml` in every e2e test without a YAML parser                                                                                                  |
 | Contexts under `src/contexts/`                                                                     | Rules match contexts by path; shared folders (`shared-kernel/`, `platform/`, `composition/`) never need exceptions                                                                         |
+| The proof and the fingerprint are taken over the raw body bytes                                    | Re-serialized JSON can differ from what the device signed (spaces, key order)                                                                                                              |
+| `Idempotent-Replayed` is always sent (`true` or `false`)                                           | The contract documents it as a boolean header on every 202                                                                                                                                 |
+| `qrCodeId` is a plain string in Feedback                                                           | Feedback's domain may not import Catalog's types                                                                                                                                           |
+| An unreadable raw text is thrown (`RawTextUnreadableError`), not a domain error                    | An integrity failure with no API code (`docs/07` §6); owner decision A                                                                                                                     |
+| The unique pair (user, Idempotency-Key) is an infrastructure error, not a conflict                 | `docs/07` v1.13 maps only two constraints; the replay lookup and the cooldown's version already catch races                                                                                |
+| Analysis is asked before the 24-hour close's transaction                                           | No outside call inside a unit of work; a retry reuses the answer                                                                                                                           |
 
 ## Known gaps
 
@@ -274,3 +294,6 @@ Use cases and ports are plain TypeScript; they are wired into NestJS in `composi
 - An access token is trusted until it expires (at most 15 minutes); a key revoked meanwhile is refused at the next session.
 - The attestation is a development stand-in. The real Apple and Google verifiers come later, so the application cannot start in production yet.
 - The challenge store is in memory and single-process; per-IP rate limiting is S0-10.
+- The in-memory unit of work runs one request at a time, so TC-QR-01 never produces a real conflict in memory; the conflict path is tested with a scripted repository, and the real race against PostgreSQL in S0-11.
+- `FinalizeUnanalyzedFeedback` has no caller yet; the sweeper that runs it is S0-10. `UnanalyzedReport` has no implementation until S0-08.
+- The platform proof is a development stand-in, like the attestation.
