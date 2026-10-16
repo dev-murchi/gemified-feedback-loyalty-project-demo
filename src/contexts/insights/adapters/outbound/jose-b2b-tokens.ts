@@ -8,6 +8,7 @@ import type {
   B2bUnauthorized,
   IssuedB2bToken,
 } from '../../application/ports/b2b-access-tokens.js';
+import { ClientId } from '../../domain/b2b-client/client-id.js';
 import { parseScopes } from '../../domain/scope.js';
 import type { B2bSigningKey } from './b2b-signing-key.js';
 
@@ -31,11 +32,12 @@ function toClaims(payload: JWTPayload): B2bClaims | undefined {
   );
   const scope = payload['scope'];
   const scopes = typeof scope === 'string' ? parseScopes(scope) : undefined;
-  if (!brand.ok || payload.sub === undefined || scopes === undefined)
+  const clientId = ClientId.parse(payload.sub ?? '');
+  if (!brand.ok || clientId === undefined || scopes === undefined)
     return undefined;
   return scopes.length === 0
     ? undefined
-    : { clientId: payload.sub, brandId: brand.value, scopes };
+    : { clientId, brandId: brand.value, scopes };
 }
 
 /**

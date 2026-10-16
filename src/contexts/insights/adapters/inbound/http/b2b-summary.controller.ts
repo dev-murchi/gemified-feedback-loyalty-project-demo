@@ -5,6 +5,7 @@ import {
   Param,
   Query,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
 import {
   ClientAuthGuard,
@@ -15,6 +16,7 @@ import {
 import { parseBody } from '../../../../../platform/http/parse-body.js';
 import type { GetBranchSummary } from '../../../application/use-cases/get-branch-summary.js';
 import type { GetHeatmap } from '../../../application/use-cases/get-heatmap.js';
+import { B2bAuditInterceptor } from './b2b-audit.interceptor.js';
 import { brandOf, valueOf } from './b2b-http.js';
 import { RangeQuery } from './b2b.schemas.js';
 import { GET_BRANCH_SUMMARY, GET_HEATMAP } from './tokens.js';
@@ -22,6 +24,7 @@ import { GET_BRANCH_SUMMARY, GET_HEATMAP } from './tokens.js';
 /** The `b2b.summary.read` endpoints: branch summary and heatmap (FR-B2B-04, FR-B2B-05). */
 @Controller('v1/b2b')
 @UseGuards(ClientAuthGuard)
+@UseInterceptors(B2bAuditInterceptor)
 export class B2bSummaryController {
   constructor(
     @Inject(GET_BRANCH_SUMMARY) private readonly getSummary: GetBranchSummary,

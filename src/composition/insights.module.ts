@@ -1,6 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { Module } from '@nestjs/common';
 import type { LabelSetProvider } from '../contexts/catalog/public/label-set-provider.js';
+import { B2bAuditInterceptor } from '../contexts/insights/adapters/inbound/http/b2b-audit.interceptor.js';
 import { B2bFeedbackController } from '../contexts/insights/adapters/inbound/http/b2b-feedback.controller.js';
 import { B2bSummaryController } from '../contexts/insights/adapters/inbound/http/b2b-summary.controller.js';
 import { B2bTokenController } from '../contexts/insights/adapters/inbound/http/b2b-token.controller.js';
@@ -11,11 +12,14 @@ import {
   LIST_BRAND_FEEDBACKS,
   LIST_BRANCHES,
   LIST_TOPICS,
+  RECORD_B2B_ACCESS,
 } from '../contexts/insights/adapters/inbound/http/tokens.js';
 import { loadB2bSigningKey } from '../contexts/insights/adapters/outbound/b2b-signing-key.js';
 import { JoseB2bTokens } from '../contexts/insights/adapters/outbound/jose-b2b-tokens.js';
+import { MemoryAuditLog } from '../contexts/insights/adapters/outbound/memory-audit-log.js';
 import { MemoryB2bClientRepository } from '../contexts/insights/adapters/outbound/memory-b2b-client.repository.js';
 import { ScryptSecretHasher } from '../contexts/insights/adapters/outbound/scrypt-secret-hasher.js';
+import type { AuditLog } from '../contexts/insights/application/ports/audit-log.js';
 import type { B2bAccessTokens } from '../contexts/insights/application/ports/b2b-access-tokens.js';
 import type { B2bClientRepository } from '../contexts/insights/application/ports/b2b-client-repository.js';
 import type { ReportingQueries } from '../contexts/insights/application/ports/reporting-queries.js';
@@ -26,9 +30,12 @@ import { IssueB2bToken } from '../contexts/insights/application/use-cases/issue-
 import { ListBrandFeedbacks } from '../contexts/insights/application/use-cases/list-brand-feedbacks.js';
 import { ListBranches } from '../contexts/insights/application/use-cases/list-branches.js';
 import { ListTopics } from '../contexts/insights/application/use-cases/list-topics.js';
+import { RecordB2bAccess } from '../contexts/insights/application/use-cases/record-b2b-access.js';
 import {
+  CLIENT_ACCESS_RECORDER,
   CLIENT_AUTHENTICATOR,
   ClientAuthGuard,
+  type ClientAccessRecorder,
   type ClientAuthenticator,
 } from '../platform/http/client-auth.guard.js';
 import type { Logger } from '../shared-kernel/logger.js';
@@ -37,6 +44,7 @@ import { loadDemoB2bClients } from './demo-b2b-clients.js';
 import type { InMemoryStore } from './in-memory-store.js';
 import { MemoryReportingQueries } from './memory-reporting-queries.js';
 import {
+  AUDIT_LOG,
   B2B_ACCESS_TOKENS,
   B2B_CLIENT_REPOSITORY,
   DEMO_B2B_CLIENTS,
@@ -67,6 +75,8 @@ const authenticatorFor = (tokens: B2bAccessTokens): ClientAuthenticator => ({
  */
 @Module({
   imports: [CatalogModule],
+  // POST /v1/b2b/oauth/token (B2bTokenController) is deliberately not audited: issuing a token
+  // hands out no data. Every data endpoint is audited by ClientAuthGuard and B2bAuditInterceptor.
   controllers: [
     B2bTokenController,
     B2bFeedbackController,
@@ -172,13 +182,40 @@ const authenticatorFor = (tokens: B2bAccessTokens): ClientAuthenticator => ({
     },
     ClientAuthGuard,
     {
+      provide: AUDIT_LOG,
+      inject: [IN_MEMORY_STORE],
+      useFactory: (store: InMemoryStore) =>
+        new MemoryAuditLog(store.insights.auditLog),
+    },
+    {
+      provide: RECORD_B2B_ACCESS,
+      inject: [AUDIT_LOG, IN_MEMORY_STORE],
+      useFactory: (audit: AuditLog, store: InMemoryStore) =>
+        new RecordB2bAccess({ audit, clock: store.clock, ids: store.ids }),
+    },
+    B2bAuditInterceptor,
+    {
+      // A call refused for a missing scope is audited too, with no records (FR-B2B-09).
+      provide: CLIENT_ACCESS_RECORDER,
+      inject: [RECORD_B2B_ACCESS],
+      useFactory: (recordAccess: RecordB2bAccess): ClientAccessRecorder => ({
+        denied: (access) => recordAccess.execute({ ...access, recordCount: 0 }),
+      }),
+    },
+    {
       provide: DEMO_B2B_CLIENTS,
       inject: [B2B_CLIENT_REPOSITORY, SECRET_HASHER, IN_MEMORY_STORE],
       useFactory: (
         clients: B2bClientRepository,
         hasher: SecretHasher,
         store: InMemoryStore,
-      ) => loadDemoB2bClients(process.env, { clients, hasher, uow: store.uow }),
+      ) =>
+        loadDemoB2bClients(process.env, {
+          clients,
+          hasher,
+          uow: store.uow,
+          clock: store.clock,
+        }),
     },
   ],
 })

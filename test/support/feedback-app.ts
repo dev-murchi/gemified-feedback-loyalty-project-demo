@@ -5,7 +5,7 @@ import type { FeedbackId } from '../../src/shared-kernel/ids.js';
 import { AuthClient } from './auth-client.js';
 import { FakeDevice } from './fake-device.js';
 import { FeedbackClient } from './feedback-client.js';
-import { startApp, type RunningApp } from './start-app.js';
+import { startApp, type Customise, type RunningApp } from './start-app.js';
 
 export interface FeedbackApp {
   readonly running: RunningApp;
@@ -22,10 +22,12 @@ export interface FeedbackApp {
  * The whole API with the demo catalog (DEMO_DATA=true, NODE_ENV=test) and one registered Android
  * device holding a session. The caller stubs the env before and unstubs it after.
  */
-export async function startFeedbackApp(): Promise<FeedbackApp> {
+export async function startFeedbackApp(
+  customise?: Customise,
+): Promise<FeedbackApp> {
   vi.stubEnv('NODE_ENV', 'test');
   vi.stubEnv('DEMO_DATA', 'true');
-  const running = await startApp();
+  const running = await startApp(customise);
   const auth = new AuthClient(running.app);
   const device = new FakeDevice();
   const registered = await auth.register(device);

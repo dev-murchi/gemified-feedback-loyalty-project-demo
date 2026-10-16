@@ -2,6 +2,8 @@ import type { Clock } from '../../../../shared-kernel/clock.js';
 import { err, ok, type Result } from '../../../../shared-kernel/result.js';
 import type { TokenRejection } from '../../domain/b2b-client/token-errors.js';
 import type { B2bClient } from '../../domain/b2b-client/b2b-client.js';
+import { ClientId } from '../../domain/b2b-client/client-id.js';
+import type { SecretHash } from '../../domain/b2b-client/secret-hash.js';
 import { parseScopes, type Scope } from '../../domain/scope.js';
 import type { B2bAccessTokens } from '../ports/b2b-access-tokens.js';
 import type { B2bClientRepository } from '../ports/b2b-client-repository.js';
@@ -13,7 +15,7 @@ export interface IssueB2bTokenDeps {
   readonly tokens: B2bAccessTokens;
   readonly clock: Clock;
   /** A hash of a random secret, checked when the client is unknown so both cases take as long. */
-  readonly decoyHash: string;
+  readonly decoyHash: SecretHash;
 }
 
 /** The form fields of POST /v1/b2b/oauth/token (RFC 6749 §4.4), as received. */
@@ -84,7 +86,12 @@ export class IssueB2bToken {
 
   /** The client if the secret is right; the decoy hash keeps an unknown id as slow as a known one. */
   async #authenticate(request: CheckedRequest): Promise<B2bClient | undefined> {
-    const client = await this.deps.clients.findById(request.clientId);
+    // A malformed id is answered like an unknown one, after the same hash check (no timing hint).
+    const clientId = ClientId.parse(request.clientId);
+    const client =
+      clientId === undefined
+        ? undefined
+        : await this.deps.clients.findById(clientId);
     const hash = client?.secretHash ?? this.deps.decoyHash;
     const matches = await this.deps.hasher.verify(request.clientSecret, hash);
     return matches ? client : undefined;

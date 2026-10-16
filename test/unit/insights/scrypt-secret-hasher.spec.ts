@@ -1,9 +1,10 @@
+import type { SecretHash } from '../../../src/contexts/insights/domain/b2b-client/secret-hash.js';
 import { ScryptSecretHasher } from '../../../src/contexts/insights/adapters/outbound/scrypt-secret-hasher.js';
 
 const hasher = new ScryptSecretHasher();
 
 describe('ScryptSecretHasher (owner decision 1 of S0-09)', () => {
-  let hash: string;
+  let hash: SecretHash;
 
   beforeAll(async () => {
     hash = await hasher.hash('correct horse battery staple');
@@ -37,9 +38,12 @@ describe('ScryptSecretHasher (owner decision 1 of S0-09)', () => {
   ])(
     'refuses an unreadable or broken hash %j without throwing',
     async (broken) => {
-      expect(await hasher.verify('correct horse battery staple', broken)).toBe(
-        false,
-      );
+      expect(
+        await hasher.verify(
+          'correct horse battery staple',
+          broken as SecretHash,
+        ),
+      ).toBe(false);
     },
   );
 });

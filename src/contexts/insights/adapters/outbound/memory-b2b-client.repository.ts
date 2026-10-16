@@ -2,6 +2,7 @@ import type { InMemoryTable } from '../../../../shared-kernel/adapters/in-memory
 import { saveVersioned } from '../../../../shared-kernel/adapters/save-versioned.js';
 import type { EventCollector } from '../../../../shared-kernel/unit-of-work.js';
 import type { B2bClientRepository } from '../../application/ports/b2b-client-repository.js';
+import type { ClientId } from '../../domain/b2b-client/client-id.js';
 import {
   B2bClient,
   type B2bClientState,
@@ -20,7 +21,7 @@ export interface MemoryB2bClientRepositoryDeps {
 export class MemoryB2bClientRepository implements B2bClientRepository {
   constructor(private readonly deps: MemoryB2bClientRepositoryDeps) {}
 
-  findById(clientId: string): Promise<B2bClient | undefined> {
+  findById(clientId: ClientId): Promise<B2bClient | undefined> {
     const row = this.deps.table.get(clientId);
     if (row === undefined) return Promise.resolve(undefined);
     const { version, ...state } = row;

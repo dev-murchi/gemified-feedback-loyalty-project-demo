@@ -32,6 +32,26 @@ export interface ClientAuthenticator {
   ): Promise<Result<ClientPrincipal, DomainError>>;
 }
 
+/** Injection token for the ClientAccessRecorder the composition root provides. */
+export const CLIENT_ACCESS_RECORDER = Symbol('ClientAccessRecorder');
+
+/**
+ * Records a client's access that the guard refused for a missing scope (FR-B2B-09: every access
+ * is audited). Defined here, implemented in the composition root with Insights' audit log.
+ */
+export interface ClientAccessRecorder {
+  denied(access: {
+    readonly clientId: string;
+    readonly endpoint: string;
+  }): Promise<void>;
+}
+
+/** The method and route template of a request, e.g. `GET /v1/b2b/branches/:branchId/summary`. */
+export const endpointOf = (request: Request): string => {
+  const route = (request.route as { path?: unknown } | undefined)?.path;
+  return `${request.method} ${typeof route === 'string' ? route : request.path}`;
+};
+
 const REQUIRED_SCOPE = 'requiredScope';
 const CLIENT = 'client';
 
@@ -41,7 +61,8 @@ export const RequireScope = (scope: string) =>
 
 /**
  * `b2bOAuth` security: no valid B2B token is 401 UNAUTHORIZED; a valid token without the route's
- * scope is 403 FORBIDDEN (TC-B2B-04). A route without RequireScope is a programming error.
+ * scope is 403 FORBIDDEN (TC-B2B-04), recorded first, since the client is known. A route without
+ * RequireScope is a programming error.
  */
 @Injectable()
 export class ClientAuthGuard implements CanActivate {
@@ -49,6 +70,8 @@ export class ClientAuthGuard implements CanActivate {
     @Inject(CLIENT_AUTHENTICATOR)
     private readonly authenticator: ClientAuthenticator,
     @Inject(Reflector) private readonly reflector: Reflector,
+    @Inject(CLIENT_ACCESS_RECORDER)
+    private readonly recorder: ClientAccessRecorder,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -59,16 +82,28 @@ export class ClientAuthGuard implements CanActivate {
     if (scope === undefined)
       throw new Error('ClientAuthGuard needs RequireScope on the route');
     const http = context.switchToHttp();
+    const request = http.getRequest<Request>();
     const caller = await this.authenticator.authenticate(
-      http.getRequest<Request>().header('authorization'),
+      request.header('authorization'),
     );
     if (!caller.ok) throw ProblemException.from(caller.error);
-    if (!caller.value.scopes.includes(scope))
+    if (!caller.value.scopes.includes(scope)) {
+      await this.recorder.denied({
+        clientId: caller.value.clientId,
+        endpoint: endpointOf(request),
+      });
       throw new ProblemException('FORBIDDEN');
+    }
     http.getResponse<Response>().locals[CLIENT] = caller.value;
     return true;
   }
 }
+
+/** The client a ClientAuthGuard let through, or undefined if the request did not pass one. */
+export const clientOf = (response: Response): ClientPrincipal | undefined => {
+  const client: unknown = response.locals[CLIENT];
+  return client === undefined ? undefined : (client as ClientPrincipal);
+};
 
 /** The client a ClientAuthGuard let through; using it without the guard is a programming error. */
 export const CurrentClient = createParamDecorator(

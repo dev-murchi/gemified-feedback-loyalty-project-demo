@@ -3,24 +3,33 @@ import type { UnitOfWork } from '../../../../../shared-kernel/unit-of-work.js';
 import type { B2bClientRepository } from '../../../application/ports/b2b-client-repository.js';
 import type { SecretHasher } from '../../../application/ports/secret-hasher.js';
 import { B2bClient } from '../../../domain/b2b-client/b2b-client.js';
+import { ClientId } from '../../../domain/b2b-client/client-id.js';
 import { parseScopes, type Scope } from '../../../domain/scope.js';
 
 /** At least this many characters: a demo secret must not be guessable either (owner decision 1). */
 export const MIN_SECRET_LENGTH = 32;
 
-/** One entry of B2B_DEMO_CLIENTS. `brand` is a demo brand key (`fuel`, `coffee`). */
+/** A demo client without `expiresAt` expires this long after start-up (FR-B2B-01: every client expires). */
+export const DEFAULT_DEMO_CLIENT_LIFETIME_MS = 90 * 24 * 60 * 60 * 1000;
+
+/**
+ * One entry of B2B_DEMO_CLIENTS. `brand` is a demo brand key (`fuel`, `coffee`); `expiresAt` is an
+ * optional ISO 8601 date-time.
+ */
 interface DemoClientEntry {
   readonly clientId: string;
   readonly brand: string;
   readonly secret: string;
   readonly scope: string;
+  readonly expiresAt?: string;
 }
 
 export interface DemoClient {
-  readonly clientId: string;
+  readonly clientId: ClientId;
   readonly brandId: BrandId;
   readonly secret: string;
   readonly scopes: readonly Scope[];
+  readonly expiresAt: Date;
 }
 
 const isEntry = (value: unknown): value is DemoClientEntry =>
@@ -28,13 +37,35 @@ const isEntry = (value: unknown): value is DemoClientEntry =>
   value !== null &&
   ['clientId', 'brand', 'secret', 'scope'].every(
     (key) => typeof (value as Record<string, unknown>)[key] === 'string',
+  ) &&
+  ['string', 'undefined'].includes(
+    typeof (value as { expiresAt?: unknown }).expiresAt,
   );
+
+function expiryOf(entry: DemoClientEntry, now: Date): Date {
+  if (entry.expiresAt === undefined)
+    return new Date(now.getTime() + DEFAULT_DEMO_CLIENT_LIFETIME_MS);
+  const expiresAt = new Date(entry.expiresAt);
+  if (Number.isNaN(expiresAt.getTime()) || expiresAt <= now)
+    throw new Error(
+      `B2B_DEMO_CLIENTS: "${entry.clientId}" needs an expiresAt in the future`,
+    );
+  return expiresAt;
+}
 
 function toClient(
   entry: DemoClientEntry,
-  brands: Readonly<Record<string, BrandId>>,
+  context: {
+    readonly brands: Readonly<Record<string, BrandId>>;
+    readonly now: Date;
+  },
 ): DemoClient {
-  const brandId = brands[entry.brand];
+  const clientId = ClientId.parse(entry.clientId);
+  if (clientId === undefined)
+    throw new Error(
+      'B2B_DEMO_CLIENTS: a clientId is not 3–64 lowercase letters, digits, ., _ or -',
+    );
+  const brandId = context.brands[entry.brand];
   if (brandId === undefined)
     throw new Error(`B2B_DEMO_CLIENTS: unknown demo brand "${entry.brand}"`);
   if (entry.secret.length < MIN_SECRET_LENGTH)
@@ -44,17 +75,26 @@ function toClient(
   const scopes = parseScopes(entry.scope);
   if (scopes === undefined || scopes.length === 0)
     throw new Error(`B2B_DEMO_CLIENTS: "${entry.clientId}" needs known scopes`);
-  return { clientId: entry.clientId, brandId, secret: entry.secret, scopes };
+  return {
+    clientId,
+    brandId,
+    secret: entry.secret,
+    scopes,
+    expiresAt: expiryOf(entry, context.now),
+  };
 }
 
 /**
- * Reads B2B_DEMO_CLIENTS: a JSON array of `{ clientId, brand, secret, scope }` (owner decision 1 of
+ * Reads B2B_DEMO_CLIENTS: a JSON array of `{ clientId, brand, secret, scope, expiresAt? }` (owner decision 1 of
  * S0-09: secrets come from the environment, never from git). Anything malformed stops start-up
  * with a message that names the field, never the secret.
  */
 export function parseDemoClients(
   json: string,
-  brands: Readonly<Record<string, BrandId>>,
+  context: {
+    readonly brands: Readonly<Record<string, BrandId>>;
+    readonly now: Date;
+  },
 ): DemoClient[] {
   let parsed: unknown;
   try {
@@ -66,7 +106,7 @@ export function parseDemoClients(
     throw new Error(
       'B2B_DEMO_CLIENTS must be an array of { clientId, brand, secret, scope }',
     );
-  return parsed.map((entry) => toClient(entry, brands));
+  return parsed.map((entry) => toClient(entry, context));
 }
 
 /** Stores the demo clients with hashed secrets, in one unit of work; the plain secret is dropped. */
@@ -85,7 +125,7 @@ export async function seedDemoClients(
         brandId: demo.brandId,
         secretHash: await deps.hasher.hash(demo.secret),
         scopes: demo.scopes,
-        expiresAt: null,
+        expiresAt: demo.expiresAt,
       }),
     ),
   );

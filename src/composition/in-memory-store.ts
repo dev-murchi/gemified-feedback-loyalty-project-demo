@@ -1,4 +1,5 @@
 import type { FeedbackAnalysisRow } from '../contexts/analysis/adapters/outbound/memory-feedback-analysis.repository.js';
+import type { AuditRow } from '../contexts/insights/adapters/outbound/memory-audit-log.js';
 import type { B2bClientRow } from '../contexts/insights/adapters/outbound/memory-b2b-client.repository.js';
 import type { BrandRow } from '../contexts/catalog/adapters/outbound/memory-brand.repository.js';
 import type { BranchRow } from '../contexts/catalog/adapters/outbound/memory-branch.repository.js';
@@ -40,6 +41,7 @@ export interface AnalysisTables {
 
 export interface InsightsTables {
   readonly b2bClients: InMemoryTable<string, B2bClientRow>;
+  readonly auditLog: InMemoryTable<string, AuditRow>;
 }
 
 export interface GamificationTables {
@@ -86,6 +88,7 @@ const createTables = (): ContextTables => ({
   } satisfies AnalysisTables,
   insights: {
     b2bClients: new InMemoryTable<string, B2bClientRow>(),
+    auditLog: new InMemoryTable<string, AuditRow>(),
   } satisfies InsightsTables,
   gamification: {
     wallets: new InMemoryTable<string, WalletRow>(),

@@ -5,6 +5,7 @@ import {
   type ScryptOptions,
 } from 'node:crypto';
 import type { SecretHasher } from '../../application/ports/secret-hasher.js';
+import type { SecretHash } from '../../domain/b2b-client/secret-hash.js';
 
 const KEY_BYTES = 32;
 const SALT_BYTES = 16;
@@ -39,13 +40,13 @@ const FORMAT =
  * a random salt per secret, the parameters stored in the hash, constant-time comparison.
  */
 export class ScryptSecretHasher implements SecretHasher {
-  async hash(secret: string): Promise<string> {
+  async hash(secret: string): Promise<SecretHash> {
     const salt = randomBytes(SALT_BYTES);
     const key = await derive(secret, salt, PARAMS);
-    return `scrypt$${PARAMS.N}$${PARAMS.r}$${PARAMS.p}$${salt.toString('base64')}$${key.toString('base64')}`;
+    return `scrypt$${PARAMS.N}$${PARAMS.r}$${PARAMS.p}$${salt.toString('base64')}$${key.toString('base64')}` as SecretHash;
   }
 
-  async verify(secret: string, hash: string): Promise<boolean> {
+  async verify(secret: string, hash: SecretHash): Promise<boolean> {
     const match = FORMAT.exec(hash);
     if (match === null) return false;
     const [, n, r, p, salt, expected] = match;

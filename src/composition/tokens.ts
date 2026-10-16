@@ -48,3 +48,4 @@ export const SECRET_HASHER = Symbol('SecretHasher');
 export const B2B_ACCESS_TOKENS = Symbol('B2bAccessTokens');
 export const REPORTING_QUERIES = Symbol('ReportingQueries');
 export const DEMO_B2B_CLIENTS = Symbol('DemoB2bClients');
+export const AUDIT_LOG = Symbol('AuditLog');

@@ -1,11 +1,12 @@
 import type { DomainError } from '../../../../shared-kernel/domain-error.js';
 import type { BrandId } from '../../../../shared-kernel/ids.js';
 import type { Result } from '../../../../shared-kernel/result.js';
+import type { ClientId } from '../../domain/b2b-client/client-id.js';
 import type { Scope } from '../../domain/scope.js';
 
 /** What a B2B access token says about its holder. */
 export interface B2bClaims {
-  readonly clientId: string;
+  readonly clientId: ClientId;
   readonly brandId: BrandId;
   readonly scopes: readonly Scope[];
 }

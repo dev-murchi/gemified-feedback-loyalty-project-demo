@@ -2,17 +2,19 @@ import { AggregateRoot } from '../../../../shared-kernel/aggregate-root.js';
 import type { BrandId } from '../../../../shared-kernel/ids.js';
 import { err, ok, type Result } from '../../../../shared-kernel/result.js';
 import type { Scope } from '../scope.js';
+import type { ClientId } from './client-id.js';
+import type { SecretHash } from './secret-hash.js';
 import type { TokenRejection } from './token-errors.js';
 
 export interface B2bClientState {
   /** The OAuth2 `client_id`, e.g. `brand-a-panel`. */
-  readonly clientId: string;
+  readonly clientId: ClientId;
   readonly brandId: BrandId;
   /** The stored hash of the secret; the secret itself is never kept (SDD 7.3). */
-  readonly secretHash: string;
+  readonly secretHash: SecretHash;
   readonly scopes: readonly Scope[];
-  /** After this time the client can no longer get a token; null for no expiry. */
-  readonly expiresAt: Date | null;
+  /** From this time on the client gets no token; every client has one (FR-B2B-01, ADR-013). */
+  readonly expiresAt: Date;
   readonly revokedAt: Date | null;
 }
 
@@ -32,7 +34,7 @@ export class B2bClient extends AggregateRoot {
     this.#state = {
       ...state,
       scopes: [...state.scopes],
-      expiresAt: copyDate(state.expiresAt),
+      expiresAt: new Date(state.expiresAt),
       revokedAt: copyDate(state.revokedAt),
     };
   }
@@ -50,12 +52,12 @@ export class B2bClient extends AggregateRoot {
     return {
       ...this.#state,
       scopes: [...this.#state.scopes],
-      expiresAt: copyDate(this.#state.expiresAt),
+      expiresAt: new Date(this.#state.expiresAt),
       revokedAt: copyDate(this.#state.revokedAt),
     };
   }
 
-  get clientId(): string {
+  get clientId(): ClientId {
     return this.#state.clientId;
   }
 
@@ -63,13 +65,13 @@ export class B2bClient extends AggregateRoot {
     return this.#state.brandId;
   }
 
-  get secretHash(): string {
+  get secretHash(): SecretHash {
     return this.#state.secretHash;
   }
 
   isActiveAt(now: Date): boolean {
     const { revokedAt, expiresAt } = this.#state;
-    return revokedAt === null && (expiresAt === null || now < expiresAt);
+    return revokedAt === null && now < expiresAt;
   }
 
   /**

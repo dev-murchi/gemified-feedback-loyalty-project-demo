@@ -5,6 +5,7 @@ import {
 } from '../contexts/insights/adapters/inbound/demo/demo-b2b-clients.js';
 import type { B2bClientRepository } from '../contexts/insights/application/ports/b2b-client-repository.js';
 import type { SecretHasher } from '../contexts/insights/application/ports/secret-hasher.js';
+import type { Clock } from '../shared-kernel/clock.js';
 import type { BrandId } from '../shared-kernel/ids.js';
 import type { UnitOfWork } from '../shared-kernel/unit-of-work.js';
 import { isDemoDataEnabled, type Environment } from './demo-data.js';
@@ -29,6 +30,7 @@ export async function loadDemoB2bClients(
     readonly clients: B2bClientRepository;
     readonly hasher: SecretHasher;
     readonly uow: UnitOfWork;
+    readonly clock: Clock;
   },
 ): Promise<{ readonly loaded: number }> {
   const json = env['B2B_DEMO_CLIENTS'];
@@ -39,7 +41,10 @@ export async function loadDemoB2bClients(
     throw new Error(
       'B2B_DEMO_CLIENTS needs DEMO_DATA=true: its clients belong to the demo brands',
     );
-  const demoClients = parseDemoClients(json, demoBrandIds());
+  const demoClients = parseDemoClients(json, {
+    brands: demoBrandIds(),
+    now: deps.clock.now(),
+  });
   await seedDemoClients(deps, demoClients);
   return { loaded: demoClients.length };
 }

@@ -1,4 +1,5 @@
 import { JoseB2bTokens } from '../../../src/contexts/insights/adapters/outbound/jose-b2b-tokens.js';
+import type { SecretHash } from '../../../src/contexts/insights/domain/b2b-client/secret-hash.js';
 import type { SecretHasher } from '../../../src/contexts/insights/application/ports/secret-hasher.js';
 import {
   IssueB2bToken,
@@ -62,7 +63,7 @@ describe('IssueB2bToken (FR-B2B-01)', () => {
       hasher: recordingHasher,
       tokens,
       clock,
-      decoyHash: 'fake$decoy',
+      decoyHash: 'fake$decoy' as SecretHash,
     });
     await harness.uow.run(() => harness.clients.save(aClient()));
   });
@@ -114,6 +115,13 @@ describe('IssueB2bToken (FR-B2B-01)', () => {
   it('checks a secret for an unknown client too, against the decoy, so timing tells nothing', async () => {
     await issue.execute(request({ clientId: 'brand-z-panel' }));
 
+    expect(checked).toEqual(['fake$decoy']);
+  });
+
+  it('answers a malformed client id like an unknown one, after the same decoy check', async () => {
+    const result = await issue.execute(request({ clientId: 'Brand A Panel!' }));
+
+    expect(result).toEqual({ ok: false, error: { error: 'invalid_client' } });
     expect(checked).toEqual(['fake$decoy']);
   });
 
