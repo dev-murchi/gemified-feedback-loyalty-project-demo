@@ -85,6 +85,9 @@ describe('InMemoryUnitOfWork', () => {
         aggregateId: 'feedback-1',
         payload: submitted,
         createdAt: clock.now(),
+        attempts: 0,
+        lastError: null,
+        publishedAt: null,
       },
     ]);
   });

@@ -89,6 +89,9 @@ export class InMemoryUnitOfWork implements UnitOfWork, EventCollector {
       aggregateId: event.aggregateId,
       payload: event,
       createdAt: this.#deps.clock.now(),
+      attempts: 0,
+      lastError: null,
+      publishedAt: null,
     };
     this.#deps.outbox.set(record.id, record);
   }
