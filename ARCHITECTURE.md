@@ -27,6 +27,7 @@ DEMO_DATA=true npm run start:dev   # same, with the public demo catalog loaded
 JWT_PRIVATE_KEY="$(…)" JWT_KEY_ID=k1 npm run start:dev   # fixed signing key (see .env.example); without it a key is generated per process outside production
 RAW_TEXT_KEY="$(openssl rand -base64 32)" RAW_TEXT_KEY_ID=k1 npm run start:dev   # fixed raw-text key; without it one is generated per process outside production
 LLM_DRIVER=openai OPENAI_API_KEY=… OPENAI_MODEL=… npm run start:dev   # real provider; without LLM_DRIVER the demo stand-in labels everything valid
+B2B_DEMO_CLIENTS='[{"clientId":"fuel-panel","brand":"fuel","secret":"…","scope":"b2b.feedback.read b2b.summary.read"}]' DEMO_DATA=true npm run start:dev   # demo brand panels; see .env.example (B2B_JWT_PRIVATE_KEY, B2B_JWT_KEY_ID for a fixed key)
 npm run verify           # every quality gate, same as CI
 ```
 
@@ -72,6 +73,9 @@ src/
     feedback.module.ts     # Feedback wiring: repositories, raw-text cipher and key, use cases, controller
     analysis.module.ts     # Analysis wiring: repository, analyzer from LLM_DRIVER, ProcessAnalysisJob, UnanalyzedReport
     sentiment-analyzer-driver.ts # LLM_DRIVER: openai or the demo fake (refused in production)
+    insights.module.ts     # Insights wiring: clients, scrypt, B2B key and tokens, read model, use cases, audit, controllers
+    memory-reporting-queries.ts # the in-memory read model: reads Catalog, Feedback and Analysis tables (B6)
+    demo-b2b-clients.ts    # B2B_DEMO_CLIENTS: needs DEMO_DATA=true, refused in production
     configure-app.ts       # HTTP set-up shared by main.api.ts and the e2e tests
     event-routes.ts        # the only place event routes are registered; freezes the router
     event-routes.module.ts # runs event-routes.ts during start-up
@@ -83,7 +87,8 @@ src/
                            # RandomIdGenerator, CryptoRandomSource, ConsoleLogger
   platform/
     http/                  # error-codes (status table, titles), problem-details, problem-exception,
-                           # problem.filter, request-id, bearer-auth.guard, configure-http, parse-body, raw-body
+                           # problem.filter, request-id, bearer-auth.guard, client-auth.guard, configure-http,
+                           # parse-body, raw-body
   contexts/
     identity/
       domain/                # challenge/ (Nonce, Challenge), user/ (User, DeviceKey, trust level, key values),
@@ -115,6 +120,17 @@ src/
       adapters/outbound/     # memory repository, NoBudgetGuard, openai/ (adapter, config), fake/ (demo analyzer),
                              # prompts/feedback-analysis-v1.ts
       public/                # FeedbackAnalyzed, UnanalyzedReport
+    insights/
+      domain/                # scope, complaint, reported-feedback, not-found; b2b-client/ (B2bClient, ClientId,
+                             # SecretHash, token errors), time-range/ (TimeRange, zoned clock), paging/ (Cursor,
+                             # KeyCursor, PageSize), summary/ (tally)
+      application/           # ports/ (B2bClientRepository, SecretHasher, B2bAccessTokens, ReportingQueries, AuditLog),
+                             # use-cases/ (IssueB2bToken, ListBranches, ListBrandFeedbacks, GetBranchSummary,
+                             # GetHeatmap, ListTopics, RecordB2bAccess), topic-names
+      adapters/
+        inbound/http/        # token, feedback and summary controllers, audit interceptor, Zod query schemas
+        inbound/demo/        # B2B_DEMO_CLIENTS parsing and seeding
+        outbound/            # memory client repository and audit log, scrypt hasher, B2B signing key, jose tokens
     catalog/
       domain/                # sector, geo-point, topic-key; brand/, branch/ (QrCode, QrToken), label-set/
       application/           # ports/ (repositories), use-cases/ (ResolveQr, ProvideLabelSet, RevokeQrCode)
@@ -133,8 +149,8 @@ src/
 scripts/                   # check-mock.ts, generate-demo-catalog.ts
 test/
   support/                 # fakes, builders, in-memory harnesses
-  unit/                    # shared-kernel/, analysis/, catalog/, feedback/, gamification/, identity/, platform/, composition/
-  contract/                # support/ (generic contracts), analysis/, catalog/, feedback/, gamification/, identity/
+  unit/                    # shared-kernel/, analysis/, catalog/, feedback/, gamification/, identity/, insights/, platform/, composition/
+  contract/                # support/ (generic contracts), analysis/, catalog/, feedback/, gamification/, identity/, insights/
   e2e/                     # the real AppModule over HTTP; global-setup.ts bundles the contract, setup.ts
                            # checks every response against it
 ```
@@ -200,17 +216,18 @@ Adapters log through the shared-kernel `Logger` port (`warn(message, fields)`), 
 
 `src/platform/http/` is the shared, framework-bound part of every inbound HTTP adapter. It imports no context (`platform-imports-no-context`); what it needs from a context it defines as an interface, and the composition root implements it.
 
-| File                   | What it does                                                                                                                                                                                   |
-| ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `error-codes.ts`       | The one table from error code to HTTP status (and the fixed `title`). A test keeps it equal to the contract's catalog and `ErrorCode` enum. 429 is only for `RATE_LIMITED`                     |
-| `problem-details.ts`   | The `Problem` shape (RFC 9457 plus `code`, `requestId`, `retryAfterSeconds`, `errors`). There is no user-facing message                                                                        |
-| `problem-exception.ts` | What a controller throws to end a request; `ProblemException.from(domainError)` keeps the code, the field of a validation error and `retryAfterSeconds`                                        |
-| `problem.filter.ts`    | Turns every error into `application/problem+json`. Framework errors map by status; anything unexpected is `INTERNAL_ERROR`, logged with the request id and without details                     |
-| `request-id.ts`        | `X-Request-Id`: the caller's if plain, else a new one; echoed in the header and in every Problem                                                                                               |
-| `bearer-auth.guard.ts` | `mobileBearer`: asks an `Authenticator` (provided by the composition root) who is calling; `@CurrentPrincipal()` hands the caller to the handler                                               |
-| `configure-http.ts`    | Request id first, then the 8 KB JSON limit, then the filter; `X-Powered-By` disabled. Shared by `main.api.ts` and the e2e tests                                                                |
-| `parse-body.ts`        | Request format validation with Zod; failures become `VALIDATION_ERROR` with the offending fields. Meaning is checked in the domain, not here                                                   |
-| `raw-body.ts`          | `HTTP_APP_OPTIONS` (no default parser, raw body kept) for every entry point; `rawBodyOf` throws if a parsed body has no raw bytes, so a wiring mistake can never verify proofs against nothing |
+| File                   | What it does                                                                                                                                                                                                                                                     |
+| ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `error-codes.ts`       | The one table from error code to HTTP status (and the fixed `title`). A test keeps it equal to the contract's catalog and `ErrorCode` enum. 429 is only for `RATE_LIMITED`                                                                                       |
+| `problem-details.ts`   | The `Problem` shape (RFC 9457 plus `code`, `requestId`, `retryAfterSeconds`, `errors`). There is no user-facing message                                                                                                                                          |
+| `problem-exception.ts` | What a controller throws to end a request; `ProblemException.from(domainError)` keeps the code, the field of a validation error and `retryAfterSeconds`                                                                                                          |
+| `problem.filter.ts`    | Turns every error into `application/problem+json`. Framework errors map by status; anything unexpected is `INTERNAL_ERROR`, logged with the request id and without details                                                                                       |
+| `request-id.ts`        | `X-Request-Id`: the caller's if plain, else a new one; echoed in the header and in every Problem                                                                                                                                                                 |
+| `bearer-auth.guard.ts` | `mobileBearer`: asks an `Authenticator` (provided by the composition root) who is calling; `@CurrentPrincipal()` hands the caller to the handler                                                                                                                 |
+| `configure-http.ts`    | Request id first, then the 8 KB JSON limit, then the filter; `X-Powered-By` disabled. Shared by `main.api.ts` and the e2e tests                                                                                                                                  |
+| `parse-body.ts`        | Request format validation with Zod; failures become `VALIDATION_ERROR` with the offending fields. Meaning is checked in the domain, not here                                                                                                                     |
+| `raw-body.ts`          | `HTTP_APP_OPTIONS` (no default parser, raw body kept) for every entry point; `rawBodyOf` throws if a parsed body has no raw bytes, so a wiring mistake can never verify proofs against nothing                                                                   |
+| `client-auth.guard.ts` | `b2bOAuth`: a `ClientAuthenticator` (from the composition root) turns the bearer token into a client; `@RequireScope` per route (401 / 403); a scope denial is recorded through `ClientAccessRecorder` first; `@CurrentClient()` hands the client to the handler |
 
 Controllers stay thin: parse the body, call one use case, turn an `Err` into a `ProblemException`, and map the result to the contract's JSON.
 
@@ -303,6 +320,15 @@ Use cases and ports are plain TypeScript; they are wired into NestJS in `composi
 | Error statuses other than 408/409/429/5xx throw instead of `unavailable`                                                       | A wrong key or model must never look like an outage that earns a 24-hour reward                                                                                                            |
 | Pre-checks are narrow (owner decision A)                                                                                       | A spam verdict costs the user the attempt; terse real complaints go to the LLM                                                                                                             |
 | `FeedbackAnalyzed` carries no spam reason                                                                                      | It is kept in Analysis for quality monitoring only (SDD 6.1)                                                                                                                               |
+| B2B client secrets are scrypt hashes from `node:crypto` (owner decision)                                                       | No download; OWASP parameters stored in the hash; constant-time comparison                                                                                                                 |
+| Demo B2B clients come from `B2B_DEMO_CLIENTS`, never from git (owner decision)                                                 | No known secret in the repository; secrets of at least 32 characters; refused in production                                                                                                |
+| B2B tokens have their own key and `aud: "b2b"` (owner decision)                                                                | Neither guard accepts the other's tokens; the keys rotate independently                                                                                                                    |
+| Each context loads its own signing key                                                                                         | `docs/07` §3 puts crypto in a context's `adapters/outbound/`; `platform/` holds only HTTP                                                                                                  |
+| Every client has an expiry; a demo client without one expires 90 days after start-up                                           | FR-B2B-01 and ADR-013 require an expiry for every client identity                                                                                                                          |
+| Business rules of reports stay in the Insights domain (`REPORTABLE_STATUSES`, `tally`)                                         | `ReportingQueries` only filters by what it is given, so its PostgreSQL version holds no rules (ADR-019 spirit)                                                                             |
+| A topic key the current label set no longer has keeps its key as its name                                                      | A report never loses a topic after a label-set change                                                                                                                                      |
+| The audit entry is written before the response; a failed write fails the request                                               | No B2B data leaves unaudited (FR-B2B-09, T-R2); the token endpoint hands out no data and is not audited                                                                                    |
+| The contract checker closes an `allOf` with `unevaluatedProperties: false`                                                     | Closing each branch would reject what another branch adds                                                                                                                                  |
 
 ## Known gaps
 
@@ -318,3 +344,5 @@ Use cases and ports are plain TypeScript; they are wired into NestJS in `composi
 - No budget guard and no cost in money yet (`NoBudgetGuard`, SDD 11.1); token counts are stored, and `cost_micro_usd` must be added before S0-13 (NFR-COST-01).
 - The OpenAI request sets no `max_completion_tokens` and no temperature yet; both are set once S0-13 has chosen the model.
 - SDD 8.1 still names `prompts/feedback-analysis/v1` as the prompt location (next docs pass).
+- A B2B date range has no maximum length (owner decision for the demo); whether to cap it, e.g. at 366 days, is a question for the customer (SRS §11.3).
+- B2B reports read the in-memory store until S0-11; summaries and the heatmap are counted in memory over the period's feedback.
