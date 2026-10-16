@@ -91,14 +91,14 @@ S0-06, S0-05'ten önce yapılır (proje sahibi kararı, 11 Ekim 2026): her kulla
 ### S0-10 Asenkron altyapı ve Redis
 
 - **İçerik:** Outbox aktarıcısı; `JobQueue` port'u ve BullMQ adapter'ı; ayrı worker süreci (`main.worker.ts`); süpürücü zamanlanmış iş (FR-AI-09).
-- **Bitiş kriterleri:** API ve worker ayrı süreçlerken bir yorum uçtan uca analiz edilip ödüllendiriliyor.
+- **Bitiş kriterleri:** Bellek içi depo ve bellek içi kuyrukla, tek süreçte, outbox → aktarıcı → kuyruk → worker → analiz → ödül akışı uçtan uca çalışıyor. BullMQ adapter'ı aynı `JobQueue` sözleşme testlerini gerçek Redis'e karşı (Testcontainers) geçiyor. `main.worker.ts` başlıyor ve Redis'ten iş tüketiyor. İki ayrı süreçle uçtan uca test ortak bir veritabanı gerektirir; bu yüzden S0-11'dedir (SDD 11.2, ADR-017: veritabanı en son bağlanır).
 - **Should:** Redis challenge store'u; GCRA hız sınırlayıcı (ADR-016). Demo tek API süreciyle yapılacağı için bellek içi challenge store yeterlidir.
 - **Risk:** Challenge uç noktası için hız sınırlama (IP bazlı, kimlik doğrulama öncesi) yapılana kadar yalnızca bellek içi üst sınır korur (`MemoryChallengeStore`: bekleyen 10.000 challenge, sonrası `429 RATE_LIMITED`). Ödünleşim: bir saldırı, meşru challenge isteklerini 60 saniyeye kadar engelleyebilir; S0-10'daki IP başına sınırlama bunu ortadan kaldırır.
 
 ### S0-11 PostgreSQL adapter'ları
 
 - **İçerik:** ORM ve migration aracı kararı (ADR-017; S-20 yanıtlanmadığı için varsayılan PostgreSQL); SDD 6.1'e göre migration'lar (`version` ve `request_fingerprint` dahil); tüm repository'lerin PostgreSQL adapter'ları; `ReportingQueries`'in SQL karşılığı. Ledger idempotency anahtarının ve cihaz anahtarı tanımlayıcısının benzersizlik kısıtları adlandırılır (`ledger_entries_idempotency_key_uq`, `device_keys_key_identifier_uq`); PostgreSQL adapter'ı yalnızca bu iki kısıt adını `ConcurrencyConflictError`'a çevirir, başka hiçbir `unique_violation`'ı çevirmez (07 Bölüm 6).
-- **Bitiş kriterleri:** Repository sözleşme testlerinin tamamı PostgreSQL'e karşı geçiyor (Testcontainers). TC-QR-01 eşzamanlılık testi gerçek veritabanında geçiyor. ORM kararı ADR olarak kayıtlı.
+- **Bitiş kriterleri:** Repository sözleşme testlerinin tamamı PostgreSQL'e karşı geçiyor (Testcontainers). TC-QR-01 eşzamanlılık testi gerçek veritabanında geçiyor. ORM kararı ADR olarak kayıtlı. API ve worker ayrı süreçlerken bir yorum uçtan uca analiz edilip ödüllendiriliyor (S0-10'dan taşındı: iki süreç ortak depoyu burada bulur).
 
 ### S0-12 Uçtan uca ve sözleşme testleri
 
