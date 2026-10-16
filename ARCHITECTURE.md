@@ -74,7 +74,7 @@ src/
     analysis.module.ts     # Analysis wiring: repository, analyzer from LLM_DRIVER, ProcessAnalysisJob, UnanalyzedReport
     sentiment-analyzer-driver.ts # LLM_DRIVER: openai or the demo fake (refused in production)
     insights.module.ts     # Insights wiring: clients, scrypt, B2B key and tokens, read model, use cases, audit, controllers
-    memory-reporting-queries.ts # the in-memory read model: reads Catalog, Feedback and Analysis tables (B6)
+    memory-reporting-queries.ts # the in-memory read model: reads Catalog, Feedback and Analysis tables (docs/06 §3, Insights → Feedback, Catalog: conformist read model)
     demo-b2b-clients.ts    # B2B_DEMO_CLIENTS: needs DEMO_DATA=true, refused in production
     configure-app.ts       # HTTP set-up shared by main.api.ts and the e2e tests
     event-routes.ts        # the only place event routes are registered; freezes the router

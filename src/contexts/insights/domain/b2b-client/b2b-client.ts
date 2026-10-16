@@ -16,6 +16,8 @@ export interface B2bClientState {
   /** From this time on the client gets no token; every client has one (FR-B2B-01, ADR-013). */
   readonly expiresAt: Date;
   readonly revokedAt: Date | null;
+  /** When the client last got a token (B2B_CLIENTS.last_used_at); null before its first. */
+  readonly lastUsedAt: Date | null;
 }
 
 const copyDate = (date: Date | null): Date | null =>
@@ -36,12 +38,15 @@ export class B2bClient extends AggregateRoot {
       scopes: [...state.scopes],
       expiresAt: new Date(state.expiresAt),
       revokedAt: copyDate(state.revokedAt),
+      lastUsedAt: copyDate(state.lastUsedAt),
     };
   }
 
   /** A new, active client; version 0 means never stored. */
-  static create(state: Omit<B2bClientState, 'revokedAt'>): B2bClient {
-    return new B2bClient({ ...state, revokedAt: null }, 0);
+  static create(
+    state: Omit<B2bClientState, 'revokedAt' | 'lastUsedAt'>,
+  ): B2bClient {
+    return new B2bClient({ ...state, revokedAt: null, lastUsedAt: null }, 0);
   }
 
   static reconstitute(state: B2bClientState, version: number): B2bClient {
@@ -54,6 +59,7 @@ export class B2bClient extends AggregateRoot {
       scopes: [...this.#state.scopes],
       expiresAt: new Date(this.#state.expiresAt),
       revokedAt: copyDate(this.#state.revokedAt),
+      lastUsedAt: copyDate(this.#state.lastUsedAt),
     };
   }
 
@@ -88,6 +94,14 @@ export class B2bClient extends AggregateRoot {
       this.#state.scopes.includes(scope),
     );
     return allowed ? ok([...requested]) : err({ error: 'invalid_scope' });
+  }
+
+  /**
+   * Records that the client got a token now (FR-B2B-01, threat T-S6): a client nobody uses any more
+   * can be found and revoked, and an unexpected use of a leaked one shows.
+   */
+  markUsed(now: Date): void {
+    this.#state = { ...this.#state, lastUsedAt: new Date(now) };
   }
 
   /** Revoking twice keeps the first time (FR-B2B-01 rotation). */

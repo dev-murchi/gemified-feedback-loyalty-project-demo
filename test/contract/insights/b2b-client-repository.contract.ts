@@ -31,9 +31,10 @@ export function b2bClientRepositoryContract(
       expect(await harness.clients.findById(CLIENT_ID)).toBeUndefined();
     });
 
-    it('loads exactly what was saved, a revocation included', async () => {
+    it('loads exactly what was saved, last use and revocation included', async () => {
       const client = aClient({ expiresAt: new Date('2027-01-01T00:00:00Z') });
       client.revoke(NOW);
+      client.markUsed(NOW);
 
       await harness.uow.run(() => harness.clients.save(client));
 

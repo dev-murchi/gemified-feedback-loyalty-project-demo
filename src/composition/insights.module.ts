@@ -71,7 +71,8 @@ const authenticatorFor = (tokens: B2bAccessTokens): ClientAuthenticator => ({
 /**
  * Insights wiring (in-memory until S0-11). The B2B signing key comes from B2B_JWT_PRIVATE_KEY and
  * B2B_JWT_KEY_ID and is required in production; demo clients come from B2B_DEMO_CLIENTS. The read
- * model lives here in composition, the only layer that sees every context's tables (B6).
+ * model lives here in composition, the only layer that sees every context's tables
+ * (docs/06 §3, Insights → Feedback, Catalog: conformist read model).
  */
 @Module({
   imports: [CatalogModule],
@@ -130,6 +131,7 @@ const authenticatorFor = (tokens: B2bAccessTokens): ClientAuthenticator => ({
           hasher,
           tokens,
           clock: store.clock,
+          uow: store.uow,
           // A hash of a secret nobody knows: an unknown client id costs as long as a known one.
           decoyHash: await hasher.hash(randomBytes(32).toString('base64')),
         }),

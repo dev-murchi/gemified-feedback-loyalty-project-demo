@@ -1,5 +1,7 @@
 import type { Clock } from '../../../../shared-kernel/clock.js';
 import { err, ok, type Result } from '../../../../shared-kernel/result.js';
+import { retryOnConflict } from '../../../../shared-kernel/retry-on-conflict.js';
+import type { UnitOfWork } from '../../../../shared-kernel/unit-of-work.js';
 import type { TokenRejection } from '../../domain/b2b-client/token-errors.js';
 import type { B2bClient } from '../../domain/b2b-client/b2b-client.js';
 import { ClientId } from '../../domain/b2b-client/client-id.js';
@@ -14,6 +16,7 @@ export interface IssueB2bTokenDeps {
   readonly hasher: SecretHasher;
   readonly tokens: B2bAccessTokens;
   readonly clock: Clock;
+  readonly uow: UnitOfWork;
   /** A hash of a random secret, checked when the client is unknown so both cases take as long. */
   readonly decoyHash: SecretHash;
 }
@@ -57,7 +60,8 @@ function checkRequest(
  * POST /v1/b2b/oauth/token, client credentials (FR-B2B-01). An unknown client, a wrong secret, and a
  * revoked or expired client all answer invalid_client the same way (TC-B2B-05); the secret of an
  * unknown client is still checked against a decoy hash, so the answer's timing does not tell
- * whether a client id exists. An absent or empty `scope` means all the client's scopes.
+ * whether a client id exists. An absent or empty `scope` means all the client's scopes. Issuing
+ * a token records when the client was last used.
  */
 export class IssueB2bToken {
   constructor(private readonly deps: IssueB2bTokenDeps) {}
@@ -69,8 +73,10 @@ export class IssueB2bToken {
     if (!request.ok) return request;
     const client = await this.#authenticate(request.value);
     if (client === undefined) return err({ error: 'invalid_client' });
-    const scopes = client.grant(request.value.scopes, this.deps.clock.now());
+    const now = this.deps.clock.now();
+    const scopes = client.grant(request.value.scopes, now);
     if (!scopes.ok) return scopes;
+    await this.#markUsed(client.clientId, now);
     const token = await this.deps.tokens.issue({
       clientId: client.clientId,
       brandId: client.brandId,
@@ -82,6 +88,22 @@ export class IssueB2bToken {
       expiresIn: token.expiresIn,
       scope: scopes.value.join(' '),
     });
+  }
+
+  /**
+   * B2B_CLIENTS.last_used_at, written only when a token is issued. A concurrent request for the
+   * same client reloads and sets it again (ADR-019); the secret was already checked.
+   */
+  #markUsed(clientId: ClientId, now: Date): Promise<void> {
+    return retryOnConflict(() =>
+      this.deps.uow.run(async () => {
+        const client = await this.deps.clients.findById(clientId);
+        if (client === undefined)
+          throw new Error(`B2B client ${clientId} vanished`);
+        client.markUsed(now);
+        await this.deps.clients.save(client);
+      }),
+    );
   }
 
   /** The client if the secret is right; the decoy hash keeps an unknown id as slow as a known one. */

@@ -44,7 +44,7 @@ function matches(row: ReportedFeedback, query: FeedbackQuery): boolean {
 }
 
 /**
- * The in-memory read model of Insights (docs/06 §3, B6): it lives in the composition root, the only
+ * The in-memory read model of Insights (docs/06 §3, Insights → Feedback, Catalog: conformist read model): it lives in the composition root, the only
  * layer that may see every context's tables, and reads Catalog, Feedback and Analysis rows without
  * writing anything. The PostgreSQL version (S0-11) reads the same tables with plain SQL inside
  * Insights. It applies only the filters it is given; what is reportable is the use cases' decision.

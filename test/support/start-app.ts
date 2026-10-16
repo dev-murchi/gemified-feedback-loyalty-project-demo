@@ -49,5 +49,9 @@ export async function startApp(
   app.use(contractRecorder(inject('contractPath')));
   configureApp(app);
   await app.init();
+  // supertest adds one-time listening/error/close listeners to the shared http.Server for every
+  // request it starts on a server that is not listening yet; they go away when the request ends.
+  // TC-QR-01 sends 20 requests at once, more than Node's default warning limit of 10.
+  app.getHttpServer().setMaxListeners(64);
   return { app, clock, logger };
 }

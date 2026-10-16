@@ -63,6 +63,7 @@ describe('IssueB2bToken (FR-B2B-01)', () => {
       hasher: recordingHasher,
       tokens,
       clock,
+      uow: harness.uow,
       decoyHash: 'fake$decoy' as SecretHash,
     });
     await harness.uow.run(() => harness.clients.save(aClient()));
@@ -116,6 +117,42 @@ describe('IssueB2bToken (FR-B2B-01)', () => {
     await issue.execute(request({ clientId: 'brand-z-panel' }));
 
     expect(checked).toEqual(['fake$decoy']);
+  });
+
+  describe('last use (FR-B2B-01, T-S6; B2B_CLIENTS.last_used_at)', () => {
+    const lastUsed = async () =>
+      (await harness.clients.findById(CLIENT_ID))?.state.lastUsedAt;
+
+    it('records the time a token was issued', async () => {
+      clock.advance(60_000);
+
+      await issue.execute(request());
+
+      expect(await lastUsed()).toEqual(new Date(NOW.getTime() + 60_000));
+    });
+
+    it.each<[string, Partial<IssueB2bTokenCommand>]>([
+      ['a wrong secret', { clientSecret: 'guess' }],
+      ['a scope the client lacks', { scope: 'b2b.admin' }],
+    ])(
+      'leaves it unchanged for a refused request: %s',
+      async (_case, overrides) => {
+        await issue.execute(request(overrides));
+
+        expect(await lastUsed()).toBeNull();
+      },
+    );
+
+    it('leaves it unchanged for a revoked client', async () => {
+      const client = await harness.clients.findById(CLIENT_ID);
+      client?.revoke(NOW);
+      if (client !== undefined)
+        await harness.uow.run(() => harness.clients.save(client));
+
+      await issue.execute(request());
+
+      expect(await lastUsed()).toBeNull();
+    });
   });
 
   it('answers a malformed client id like an unknown one, after the same decoy check', async () => {
