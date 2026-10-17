@@ -10,11 +10,12 @@ export interface FeedbackRepository {
     key: IdempotencyKey,
   ): Promise<Feedback | undefined>;
   /**
-   * Ids of feedbacks still analyzing that were submitted before `submittedBefore`, oldest first,
-   * at most `limit` (the 24-hour sweeper, FR-AI-09).
+   * Ids of feedbacks still analyzing that were submitted at or before `cutoff`, oldest first, at
+   * most `limit` (the 24-hour sweeper, FR-AI-09). Inclusive, like Feedback.isOverdueAt: a feedback
+   * is due exactly 24 hours after submission.
    */
-  findAnalyzingSubmittedBefore(
-    submittedBefore: Date,
+  findAnalyzingSubmittedAtOrBefore(
+    cutoff: Date,
     limit: number,
   ): Promise<readonly FeedbackId[]>;
   /**

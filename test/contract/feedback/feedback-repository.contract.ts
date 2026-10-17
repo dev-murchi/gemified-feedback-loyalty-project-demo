@@ -193,7 +193,7 @@ export function feedbackRepositoryContract(
       );
     });
 
-    it('lists feedbacks still analyzing submitted before a time, oldest first, up to a limit (FR-AI-09)', async () => {
+    it('lists feedbacks still analyzing submitted at or before a time, oldest first, up to a limit (FR-AI-09)', async () => {
       // Given three analyzing feedbacks at T0, 1h and 2h, and a closed one at 0:30
       await save(
         aFeedback({
@@ -228,12 +228,13 @@ export function feedbackRepositoryContract(
       });
       await save(closed);
 
-      // Then only the analyzing ones before 2h are listed, oldest first, and the limit holds
+      // Then the analyzing ones up to 1h, the cutoff included, are listed oldest first
       expect(
-        await harness.feedbacks.findAnalyzingSubmittedBefore(after(2), 10),
+        await harness.feedbacks.findAnalyzingSubmittedAtOrBefore(after(1), 10),
       ).toEqual([feedbackId(1), feedbackId(2)]);
+      // And the limit holds
       expect(
-        await harness.feedbacks.findAnalyzingSubmittedBefore(after(3), 1),
+        await harness.feedbacks.findAnalyzingSubmittedAtOrBefore(after(3), 1),
       ).toEqual([feedbackId(1)]);
     });
   });

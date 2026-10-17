@@ -37,6 +37,7 @@ describe('InProcessWorker', () => {
           ),
         },
       },
+      tasks: [],
       clock: new FakeClock(),
       logger: new RecordingLogger(),
     });
@@ -62,6 +63,7 @@ describe('InProcessWorker', () => {
       handlers: {
         analysis: { handle: () => Promise.reject(new Error('broken')) },
       },
+      tasks: [],
       clock,
       logger,
     });
@@ -95,6 +97,7 @@ describe('InProcessWorker', () => {
       relay,
       queue: new MemoryJobQueue(),
       handlers: {},
+      tasks: [],
       clock: new FakeClock(),
       logger: new RecordingLogger(),
     });
@@ -117,6 +120,7 @@ describe('InProcessWorker', () => {
       relay: failing,
       queue: new MemoryJobQueue(),
       handlers: {},
+      tasks: [],
       clock: new FakeClock(),
       logger,
     });
@@ -129,5 +133,35 @@ describe('InProcessWorker', () => {
       { message: 'In-process worker tick failed', fields: { error: 'Error' } },
       { message: 'In-process worker tick failed', fields: { error: 'Error' } },
     ]);
+  });
+
+  it('runs a periodic task on the first tick, then only once its interval has passed', async () => {
+    const clock = new FakeClock();
+    let runs = 0;
+    const worker = new InProcessWorker({
+      relay,
+      queue: new MemoryJobQueue(),
+      handlers: {},
+      tasks: [
+        {
+          name: 'sweep',
+          everyMs: 60_000,
+          run: () => {
+            runs += 1;
+            return Promise.resolve();
+          },
+        },
+      ],
+      clock,
+      logger: new RecordingLogger(),
+    });
+
+    await worker.tick();
+    clock.advance(59_999);
+    await worker.tick();
+    clock.advance(1);
+    await worker.tick();
+
+    expect(runs).toBe(2);
   });
 });

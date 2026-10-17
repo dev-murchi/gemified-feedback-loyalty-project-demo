@@ -153,6 +153,13 @@ const random = new CryptoRandomSource();
       ) => new ApplyAnalysisResult({ feedbacks, cooldowns }),
     },
   ],
-  exports: [APPLY_ANALYSIS_RESULT, RAW_TEXT_SOURCE],
+  // The repositories are exported for the sweeper module only: it needs Feedback and Analysis
+  // together, so it is wired outside both (sweeper.module.ts).
+  exports: [
+    APPLY_ANALYSIS_RESULT,
+    RAW_TEXT_SOURCE,
+    FEEDBACK_REPOSITORY,
+    REWARD_COOLDOWN_REPOSITORY,
+  ],
 })
 export class FeedbackModule {}

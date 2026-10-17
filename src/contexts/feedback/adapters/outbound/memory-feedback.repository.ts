@@ -98,8 +98,8 @@ export class MemoryFeedbackRepository implements FeedbackRepository {
     return Promise.resolve(row === undefined ? undefined : toFeedback(row));
   }
 
-  findAnalyzingSubmittedBefore(
-    submittedBefore: Date,
+  findAnalyzingSubmittedAtOrBefore(
+    cutoff: Date,
     limit: number,
   ): Promise<readonly FeedbackId[]> {
     const ids = this.deps.table
@@ -107,7 +107,7 @@ export class MemoryFeedbackRepository implements FeedbackRepository {
       .filter(
         (row) =>
           row.status === 'analyzing' &&
-          row.submittedAt.getTime() < submittedBefore.getTime(),
+          row.submittedAt.getTime() <= cutoff.getTime(),
       )
       .sort((a, b) => a.submittedAt.getTime() - b.submittedAt.getTime())
       .slice(0, limit)
