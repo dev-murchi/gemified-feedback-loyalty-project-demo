@@ -1,3 +1,4 @@
+import { reasonOf } from '../failure-reason.js';
 import type { JobHandler } from '../job-handler.js';
 import { attemptsExhausted, failureDelayMs } from '../job-failure-backoff.js';
 import type { JobQueue, QueuedJob } from '../job-queue.js';
@@ -21,9 +22,6 @@ export interface RunReport {
   readonly retried: number;
   readonly failedForGood: readonly JobState[];
 }
-
-const reasonOf = (error: unknown): string =>
-  error instanceof Error ? `${error.name}: ${error.message}` : 'unknown error';
 
 /**
  * The in-memory job queue (QUEUE_DRIVER=memory): for tests and the single-process demo. A job id

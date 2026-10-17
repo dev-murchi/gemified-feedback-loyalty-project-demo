@@ -3,13 +3,8 @@ import type { Clock } from '../shared-kernel/clock.js';
 import type { JobHandler } from '../shared-kernel/job-handler.js';
 import type { Logger } from '../shared-kernel/logger.js';
 import type { OutboxRelay } from '../shared-kernel/outbox-relay.js';
-
-/** A job the worker runs on a schedule (e.g. the 24-hour sweeper), at most once per `everyMs`. */
-export interface PeriodicTask {
-  readonly name: string;
-  readonly everyMs: number;
-  run(): Promise<void>;
-}
+import type { JobWorker } from './job-worker.js';
+import { PeriodicTasks, type PeriodicTask } from './periodic-tasks.js';
 
 export interface InProcessWorkerDeps {
   readonly relay: OutboxRelay;
@@ -24,20 +19,21 @@ export interface InProcessWorkerDeps {
 /**
  * The worker for the single-process demo (QUEUE_DRIVER=memory): each tick hands the outbox to the
  * in-memory queue, runs the jobs that are due, and runs the periodic tasks whose time has come. It runs on a timer only with
- * RUN_WORKER_IN_API=true; tests call `tick` themselves. The separate worker process with BullMQ
- * (`main.worker.ts`) comes with the Redis queue in slice 4.
+ * RUN_WORKER_IN_API=true; tests call `tick` themselves. The BullMQ counterpart is `BullMqWorker`.
  */
-export class InProcessWorker {
+export class InProcessWorker implements JobWorker {
   #timer: ReturnType<typeof setInterval> | undefined;
   #running: Promise<void> = Promise.resolve();
-  readonly #lastRun = new Map<string, number>();
+  readonly #tasks: PeriodicTasks;
 
-  constructor(private readonly deps: InProcessWorkerDeps) {}
+  constructor(private readonly deps: InProcessWorkerDeps) {
+    this.#tasks = new PeriodicTasks(deps.tasks, deps.clock);
+  }
 
   async tick(): Promise<void> {
     await this.deps.relay.relay();
     await this.#runQueues();
-    await this.#runDueTasks();
+    await this.#tasks.runDue();
   }
 
   async #runQueues(): Promise<void> {
@@ -57,17 +53,6 @@ export class InProcessWorker {
     }
   }
 
-  /** Each task runs on the first tick, then once `everyMs` has passed by the application clock. */
-  async #runDueTasks(): Promise<void> {
-    const now = this.deps.clock.now().getTime();
-    for (const task of this.deps.tasks) {
-      const last = this.#lastRun.get(task.name);
-      if (last !== undefined && now - last < task.everyMs) continue;
-      this.#lastRun.set(task.name, now);
-      await task.run();
-    }
-  }
-
   /** Ticks every `intervalMs`, never two at once; a tick that throws is logged, the timer goes on. */
   start(intervalMs: number): void {
     if (this.#timer !== undefined) return;
@@ -82,9 +67,28 @@ export class InProcessWorker {
     }, intervalMs);
   }
 
+  describe(intervalMs: number): Readonly<Record<string, unknown>> {
+    return {
+      driver: 'memory',
+      queues: Object.keys(this.deps.handlers),
+      concurrency: 1,
+      tickIntervalMs: intervalMs,
+      tasks: this.deps.tasks.map(({ name, everyMs }) => ({ name, everyMs })),
+    };
+  }
+
   async stop(): Promise<void> {
+    this.#stopTimer();
+    await this.#running;
+  }
+
+  forceStop(): Promise<void> {
+    this.#stopTimer();
+    return Promise.resolve();
+  }
+
+  #stopTimer(): void {
     if (this.#timer !== undefined) clearInterval(this.#timer);
     this.#timer = undefined;
-    await this.#running;
   }
 }

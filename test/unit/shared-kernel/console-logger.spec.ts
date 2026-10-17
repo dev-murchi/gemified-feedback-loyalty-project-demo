@@ -18,4 +18,30 @@ describe('ConsoleLogger', () => {
       { key: 'reward:f1', level: 'warn', message: 'real message' },
     ]);
   });
+
+  it('writes an info line with its own level, so the console can route it', () => {
+    const written: { line: string; level: string }[] = [];
+    const logger = new ConsoleLogger((line, level) =>
+      written.push({ line, level }),
+    );
+
+    logger.info('Worker started', { driver: 'bullmq' });
+    logger.warn('Redis connection lost');
+
+    expect(
+      written.map(({ line, level }) => ({
+        level,
+        json: JSON.parse(line) as unknown,
+      })),
+    ).toEqual([
+      {
+        level: 'info',
+        json: { driver: 'bullmq', level: 'info', message: 'Worker started' },
+      },
+      {
+        level: 'warn',
+        json: { level: 'warn', message: 'Redis connection lost' },
+      },
+    ]);
+  });
 });

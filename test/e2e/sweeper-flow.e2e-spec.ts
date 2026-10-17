@@ -3,7 +3,8 @@
 // SRS CR-007 rule: given after an outage (TC-AI-04), never after off-schema answers (TC-AI-11).
 
 import type { InProcessWorker } from '../../src/composition/in-process-worker.js';
-import { IN_PROCESS_WORKER } from '../../src/composition/tokens.js';
+import type { SweepUnanalyzedFeedback } from '../../src/contexts/feedback/application/use-cases/sweep-unanalyzed-feedback.js';
+import { JOB_WORKER, SWEEP_UNANALYZED } from '../../src/composition/tokens.js';
 import {
   completion,
   startFakeOpenAi,
@@ -25,7 +26,7 @@ describe('the 24-hour sweeper through the worker (e2e)', () => {
     vi.stubEnv('OPENAI_MODEL', 'gpt-test');
     vi.stubEnv('OPENAI_BASE_URL', provider.baseUrl);
     feedback = await startFeedbackApp();
-    worker = feedback.running.app.get<InProcessWorker>(IN_PROCESS_WORKER);
+    worker = feedback.running.app.get<InProcessWorker>(JOB_WORKER);
   });
 
   afterEach(async () => {
@@ -75,5 +76,32 @@ describe('the 24-hour sweeper through the worker (e2e)', () => {
     await closedAfter24Hours();
 
     expect((await feedback.client.submit()).status).toBe(202);
+  });
+  // Two worker processes both run the sweeper every minute (the schedule is per process). Closing a
+  // feedback must therefore be safe to run twice at once; PostgreSQL repeats this in S0-11.
+  it('closes and rewards a feedback once when two sweeps run at the same time', async () => {
+    const sweep =
+      feedback.running.app.get<SweepUnanalyzedFeedback>(SWEEP_UNANALYZED);
+    provider.script = [
+      { status: 503, body: { error: { message: 'overloaded' } } },
+    ];
+    const { feedbackId } = (await feedback.client.submit()).body as {
+      feedbackId: string;
+    };
+    await worker.tick();
+    feedback.running.clock.advance(24 * HOUR);
+    await feedback.renewSession();
+
+    const reports = await Promise.all([sweep.execute(), sweep.execute()]);
+
+    expect(reports.flatMap((report) => report.failures)).toEqual([]);
+    expect(reports.reduce((total, report) => total + report.closed, 0)).toBe(1);
+    expect((await feedback.client.status(feedbackId)).body).toMatchObject({
+      status: 'unanalyzed',
+      reward: { xp: 10, points: 5 },
+    });
+    expect(
+      (await feedback.auth.wallet(feedback.client.token)).body,
+    ).toMatchObject({ xp: 10 });
   });
 });

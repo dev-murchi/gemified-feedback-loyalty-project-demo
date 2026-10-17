@@ -1,4 +1,5 @@
 import type { Clock } from './clock.js';
+import { reasonOf } from './failure-reason.js';
 import type { JobQueue } from './job-queue.js';
 import type { OutboxStore } from './outbox-store.js';
 
@@ -16,10 +17,6 @@ export interface RelayResult {
 }
 
 const DEFAULT_BATCH = 100;
-
-/** The error's name and message only: a failure reason must never carry the payload. */
-const reasonOf = (error: unknown): string =>
-  error instanceof Error ? `${error.name}: ${error.message}` : 'unknown error';
 
 /**
  * Hands outbox records to the job queue (ADR-005, TZ-4): enqueue first, then mark published. A

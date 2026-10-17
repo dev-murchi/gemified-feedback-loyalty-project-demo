@@ -52,5 +52,6 @@ export const AUDIT_LOG = Symbol('AuditLog');
 
 export const JOB_QUEUE = Symbol('JobQueue');
 export const OUTBOX_RELAY = Symbol('OutboxRelay');
-export const IN_PROCESS_WORKER = Symbol('InProcessWorker');
+export const JOB_RUNTIME = Symbol('JobRuntime');
+export const JOB_WORKER = Symbol('JobWorker');
 export const SWEEP_UNANALYZED = Symbol('SweepUnanalyzed');

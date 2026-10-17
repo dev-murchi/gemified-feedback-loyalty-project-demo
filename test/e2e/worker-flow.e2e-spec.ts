@@ -3,7 +3,7 @@
 // is given — no direct use-case call. The worker is driven tick by tick, not on its timer.
 
 import type { InProcessWorker } from '../../src/composition/in-process-worker.js';
-import { IN_PROCESS_WORKER } from '../../src/composition/tokens.js';
+import { JOB_WORKER } from '../../src/composition/tokens.js';
 import {
   completion,
   startFakeOpenAi,
@@ -29,7 +29,7 @@ describe('outbox → relay → queue → worker → reward (e2e, one process)', 
   describe('with the demo stand-in', () => {
     beforeEach(async () => {
       feedback = await startFeedbackApp();
-      worker = feedback.running.app.get<InProcessWorker>(IN_PROCESS_WORKER);
+      worker = feedback.running.app.get<InProcessWorker>(JOB_WORKER);
     });
 
     it('analyzes and rewards a submitted feedback on the next tick (US-04, FR-GAM-01)', async () => {
@@ -82,7 +82,7 @@ describe('outbox → relay → queue → worker → reward (e2e, one process)', 
       vi.stubEnv('OPENAI_MODEL', 'gpt-test');
       vi.stubEnv('OPENAI_BASE_URL', provider.baseUrl);
       feedback = await startFeedbackApp();
-      worker = feedback.running.app.get<InProcessWorker>(IN_PROCESS_WORKER);
+      worker = feedback.running.app.get<InProcessWorker>(JOB_WORKER);
     });
 
     afterEach(() => provider.close());

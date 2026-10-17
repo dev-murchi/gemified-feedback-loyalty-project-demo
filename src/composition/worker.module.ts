@@ -5,18 +5,18 @@ import {
 } from '../contexts/analysis/adapters/inbound/queue/analysis-job.handler.js';
 import type { SweepUnanalyzedFeedback } from '../contexts/feedback/application/use-cases/sweep-unanalyzed-feedback.js';
 import type { ProcessAnalysisJob } from '../contexts/analysis/application/use-cases/process-analysis-job.js';
-import { MemoryJobQueue } from '../shared-kernel/adapters/memory-job-queue.js';
 import { MemoryOutboxStore } from '../shared-kernel/adapters/memory-outbox-store.js';
 import type { Logger } from '../shared-kernel/logger.js';
-import { OutboxRelay } from '../shared-kernel/outbox-relay.js';
 import { AnalysisModule } from './analysis.module.js';
 import type { InMemoryStore } from './in-memory-store.js';
-import { InProcessWorker, type PeriodicTask } from './in-process-worker.js';
+import { createJobRuntime, type JobRuntime } from './job-runtime.js';
+import type { PeriodicTask } from './periodic-tasks.js';
 import { SweeperModule } from './sweeper.module.js';
 import {
   IN_MEMORY_STORE,
-  IN_PROCESS_WORKER,
   JOB_QUEUE,
+  JOB_RUNTIME,
+  JOB_WORKER,
   LOGGER,
   OUTBOX_RELAY,
   PROCESS_ANALYSIS_JOB,
@@ -51,54 +51,50 @@ const workerInApi = (env: NodeJS.ProcessEnv): boolean =>
   env['RUN_WORKER_IN_API'] === 'true';
 
 /**
- * The asynchronous side (ADR-005, ADR-009): the in-memory job queue, the outbox relay, and the
- * worker that runs analysis jobs and, once a minute, the 24-hour sweeper. FeedbackSubmitted is the only event relayed (ADR-020).
+ * The asynchronous side (ADR-005, ADR-009): the job queue (QUEUE_DRIVER: in memory, or BullMQ on
+ * Redis), the outbox relay, and the worker that runs analysis jobs and, once a minute, the 24-hour
+ * sweeper. FeedbackSubmitted is the only event relayed (ADR-020).
  */
 @Module({
   imports: [AnalysisModule, SweeperModule],
   providers: [
-    { provide: JOB_QUEUE, useFactory: () => new MemoryJobQueue() },
     {
-      provide: OUTBOX_RELAY,
-      inject: [IN_MEMORY_STORE, JOB_QUEUE],
-      useFactory: (store: InMemoryStore, queue: MemoryJobQueue) =>
-        new OutboxRelay({
-          outbox: new MemoryOutboxStore(store.outbox),
-          queue,
-          queues: { FeedbackSubmitted: ANALYSIS_QUEUE },
-          clock: store.clock,
-        }),
-    },
-    {
-      provide: IN_PROCESS_WORKER,
-      inject: [
-        OUTBOX_RELAY,
-        JOB_QUEUE,
-        PROCESS_ANALYSIS_JOB,
-        SWEEP_UNANALYZED,
-        IN_MEMORY_STORE,
-        LOGGER,
-      ],
+      provide: JOB_RUNTIME,
+      inject: [IN_MEMORY_STORE, PROCESS_ANALYSIS_JOB, SWEEP_UNANALYZED, LOGGER],
       useFactory: (
-        ...[relay, queue, processAnalysis, sweep, store, logger]: [
-          OutboxRelay,
-          MemoryJobQueue,
+        ...[store, processAnalysis, sweep, logger]: [
+          InMemoryStore,
           ProcessAnalysisJob,
           SweepUnanalyzedFeedback,
-          InMemoryStore,
           Logger,
         ]
-      ) => {
-        const worker = new InProcessWorker({
-          relay,
-          queue,
+      ) =>
+        createJobRuntime(process.env, {
+          outbox: new MemoryOutboxStore(store.outbox),
+          queues: { FeedbackSubmitted: ANALYSIS_QUEUE },
           handlers: {
             [ANALYSIS_QUEUE]: new AnalysisJobHandler(processAnalysis),
           },
           tasks: [sweeperTask(sweep, logger)],
           clock: store.clock,
           logger,
-        });
+        }),
+    },
+    {
+      provide: JOB_QUEUE,
+      inject: [JOB_RUNTIME],
+      useFactory: (runtime: JobRuntime) => runtime.queue,
+    },
+    {
+      provide: OUTBOX_RELAY,
+      inject: [JOB_RUNTIME],
+      useFactory: (runtime: JobRuntime) => runtime.relay,
+    },
+    {
+      provide: JOB_WORKER,
+      inject: [JOB_RUNTIME],
+      useFactory: (runtime: JobRuntime) => {
+        const { worker } = runtime;
         return Object.assign(worker, {
           onApplicationBootstrap: () => {
             if (workerInApi(process.env)) worker.start(DEFAULT_INTERVAL_MS);
@@ -108,6 +104,6 @@ const workerInApi = (env: NodeJS.ProcessEnv): boolean =>
       },
     },
   ],
-  exports: [IN_PROCESS_WORKER, JOB_QUEUE],
+  exports: [JOB_WORKER, JOB_QUEUE],
 })
 export class WorkerModule {}
