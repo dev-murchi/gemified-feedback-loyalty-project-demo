@@ -63,6 +63,8 @@ export interface InMemoryStore {
   readonly insights: InsightsTables;
   readonly gamification: GamificationTables;
   readonly identity: IdentityTables;
+  /** The transactional outbox the unit of work writes and the relay reads (ADR-005). */
+  readonly outbox: InMemoryTable<string, OutboxRecord>;
 }
 
 /** Every context's tables, one store per context. */
@@ -109,14 +111,15 @@ export function createInMemoryStore(
 ): InMemoryStore {
   const ids = new RandomIdGenerator();
   const tables = createTables();
+  const outbox = new InMemoryTable<string, OutboxRecord>();
   const uow = new InMemoryUnitOfWork({
     routes,
     tables: Object.values(tables).flatMap((context: object) =>
       Object.values(context as Record<string, InMemoryTable<string, unknown>>),
     ),
-    outbox: new InMemoryTable<string, OutboxRecord>(),
+    outbox,
     clock,
     ids,
   });
-  return { uow, clock, ids, ...tables };
+  return { uow, clock, ids, outbox, ...tables };
 }

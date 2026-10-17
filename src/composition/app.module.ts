@@ -8,6 +8,7 @@ import { FeedbackModule } from './feedback.module.js';
 import { IdentityModule } from './identity.module.js';
 import { InsightsModule } from './insights.module.js';
 import { WalletHttpModule } from './wallet-http.module.js';
+import { WorkerModule } from './worker.module.js';
 
 // Composition root: each context's module is wired in here as it is built (docs/07 §2).
 @Module({
@@ -20,6 +21,7 @@ import { WalletHttpModule } from './wallet-http.module.js';
     FeedbackModule,
     AnalysisModule,
     InsightsModule,
+    WorkerModule,
     EventRoutesModule,
   ],
 })
