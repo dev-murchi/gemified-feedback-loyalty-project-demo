@@ -8,8 +8,8 @@ Bu doküman, kodun nasıl yazılacağını tanımlar: Clean Architecture katmanl
 
 | Alan | Değer |
 | --- | --- |
-| Sürüm | 1.13 |
-| Dayandığı dokümanlar | SDD v1.3, Alan Modeli v1.2, Test Stratejisi v1.4 |
+| Sürüm | 1.15 |
+| Dayandığı dokümanlar | SDD v1.3, Alan Modeli v1.3, Test Stratejisi v1.4 |
 | Değişiklik (1.1) | Test aracı Jest yerine Vitest: NestJS 12 yalnızca ESM; Vitest ESM'i doğal olarak destekler; dependency-cruiser'a `shared-kernel-is-pure` kuralı eklendi (shared kernel'i her domain dolaylı olarak içe aktarır) |
 | Değişiklik (1.2) | `shared-kernel/adapters/` (paylaşılan bellek içi UnitOfWork ve sistem saati) ve `test/support/` (FakeClock) eklendi; dependency-cruiser'a `core-does-not-use-shared-adapters` kuralı eklendi |
 | Değişiklik (1.3) | Olay erişim anahtarı (`takeEvents`, `src/shared-kernel/repository-access.ts`) ve `repository-access-only-in-outbound-adapters` kuralı; `InMemoryTable` satırları kopyalar; save sonrası sürüm kuralı (markSaved; uygulama S0-04) |
@@ -20,6 +20,8 @@ Bu doküman, kodun nasıl yazılacağını tanımlar: Clean Architecture katmanl
 | Değişiklik (1.8) | Context'e özgü erişim anahtarları (`*-access.ts`) ve `context-access-only-in-domain-and-outbound` kuralı; olay yönlendirmeleri yalnızca `src/composition/event-routes.ts` dosyasında, kayıttan sonra dondurulur |
 | Değişiklik (1.9) | Loglama shared kernel'deki `Logger` port'u üzerinden; alanlarda kişisel veri yok; testler `RecordingLogger` sahtesiyle |
 | Değişiklik (1.10) | Yayınlanan olay tipleri `domain/events/` içinde tanımlanır, `public/` yalnızca yeniden dışa aktarır; `domain-events-only-shared-kernel` kuralı |
+| Değişiklik (1.15) | `Logger` port'una `info` eklendi; worker süreci başlangıç, Redis bağlantısı ve kapanış kayıtlarını bu port üzerinden yazar |
+| Değişiklik (1.14) | `platform/` ortak, framework veya kütüphaneye bağlı teknik altyapı olarak tanımlandı: inbound (`http/`) ve outbound (`queue/`: BullMQ `JobQueue` adapter'ı, Redis bağlantısı); §3 klasör ağacına `queue/` eklendi |
 | Değişiklik (1.13) | OAuth2 token uç noktasının hata biçimi istisnası (RFC 6749); Git akışı tek geliştiricili çalışmaya göre; araç listesi tamamlandı; dayanak sürümleri (SRS CR-007) |
 | Değişiklik (1.12) | Benzersizlik kısıtı istisnası ikiye çıktı: `DEVICE_KEYS.key_identifier` kısıtı da adıyla `ConcurrencyConflictError`'a çevrilir (eşzamanlı kayıt, FR-AUTH-02) |
 | Değişiklik (1.11) | Context'ler `src/contexts/` altına taşındı; `src/platform/` ortak altyapı; kural desenleri güncellendi; `platform-imports-no-context` kuralı |
@@ -45,7 +47,7 @@ Bu doküman, kodun nasıl yazılacağını tanımlar: Clean Architecture katmanl
 
 **Context'ler arası kural:** Bounded context'ler `src/contexts/<context>/` altındadır; `src/` altındaki diğer klasörler (`shared-kernel/`, `platform/`, `composition/`) context değildir. Bir context, başka bir context'in yalnızca `public` klasörünü kullanabilir. `public` klasörü yayınlanan olayları, open host service arayüzlerini ve bunların tiplerini içerir; aggregate'ler, use case'ler ve adapter'lar asla dışarı açılmaz. Yayınlanan olay tipleri context'in `domain/events/` klasöründe tanımlanır; `public/` bunları yalnızca yeniden dışa aktarır.
 
-**Platform:** `src/platform/`, context'lerden bağımsız ve framework'e bağlı ortak inbound altyapıdır (ör. `platform/http/`: Problem Details, hata kodu → HTTP tablosu, `X-Request-Id`, gövde sınırı, Zod yardımcısı, bearer guard). Context'lerin adapter'ları ve composition kullanabilir; domain ve application kullanamaz; platform hiçbir context'i içe aktarmaz.
+**Platform:** `src/platform/`, context'lerden bağımsız, framework veya kütüphaneye bağlı ortak teknik altyapıdır. Inbound: `platform/http/` (Problem Details, hata kodu → HTTP tablosu, `X-Request-Id`, gövde sınırı, Zod yardımcısı, guard'lar). Outbound: `platform/queue/` (BullMQ `JobQueue` adapter'ı, Redis bağlantısı). Context'lerin adapter'ları ve composition kullanabilir; domain ve application kullanamaz. Platform hiçbir context'i içe aktarmaz ve iş kuralı içermez. Birden çok context'in kullandığı port'un (ör. `JobQueue`) kütüphaneye bağlı adapter'ı bir context'in `adapters/outbound/` klasöründe değil burada durur; shared kernel kütüphane kullanamaz.
 
 ## 3. Klasör Yapısı
 
@@ -54,7 +56,8 @@ src/
   shared-kernel/           # tipli kimlikler, Clock, Result, DomainEvent, DomainError, UnitOfWork (port ve tipler)
     adapters/              # paylaşılan bellek içi UnitOfWork ve sistem saati (saf TypeScript)
   platform/
-    http/                  # ortak HTTP altyapısı (NestJS, Zod); yalnızca adapter'lar ve composition kullanır
+    http/                  # inbound: ortak HTTP altyapısı (NestJS, Zod)
+    queue/                 # outbound: BullMQ JobQueue adapter'ı, Redis bağlantısı (bullmq, ioredis)
   contexts/
     identity/
       domain/
@@ -147,7 +150,7 @@ export class SubmitFeedback {
 - `null` bir hatayı ifade etmek için kullanılmaz.
 - Eşzamanlılık çakışması bir domain hatası değildir ve hiçbir `Result` tipinde yer almaz; API hata kataloğu değişmez.
 - Benzersizlik kısıtı ihlalleri altyapı hatasıdır ve fırlatılır. İki istisna vardır ve her ikisi de **adıyla eşleştirilerek** `ConcurrencyConflictError`'a çevrilir: ledger idempotency anahtarının kısıtı (`LEDGER_ENTRIES.idempotency_key`) ve cihaz anahtarı tanımlayıcısının kısıtı (`DEVICE_KEYS.key_identifier`, `device_keys_key_identifier_uq`). Unit of work geri alınır, `retryOnConflict` tekrarlar; ledger için tekrar `ok` döner, kayıtta (`RegisterDevice`) tekrar mevcut kullanıcıyı bulup döner (FR-AUTH-02). Repository, kaydı eklemeden önce sürümü kontrol eder; kısıt yine de tetiklenirse kısıt adı ve anahtarla bir uyarı loglanır. Diğer benzersizlik ihlalleri (ör. QR token, G-3) hiçbir zaman çakışmaya çevrilmez.
-- Adapter'lar loglamak için shared kernel'deki `Logger` port'unu kullanır (`warn(message, fields)`); doğrudan `console` veya framework logger'ı kullanılmaz. `fields` alanına kişisel veri veya yorum metni konmaz (T-I4); `level` ve `message` alanları her zaman port'a verilen değerlerdir. Testler log kayıtlarını `RecordingLogger` sahtesiyle doğrular, konsolu izlemez.
+- Adapter'lar loglamak için shared kernel'deki `Logger` port'unu kullanır (`info(message, fields)`, `warn(message, fields)`); doğrudan `console` veya framework logger'ı kullanılmaz. `fields` alanına kişisel veri veya yorum metni konmaz (T-I4); `level` ve `message` alanları her zaman port'a verilen değerlerdir. Testler log kayıtlarını `RecordingLogger` sahtesiyle doğrular, konsolu izlemez.
 - Unit of work içinde (use case işi veya senkron olay işleyicisi) hatalar genel bir try/catch ile yutulmaz; yakalanan bir `ConcurrencyConflictError` unit of work'ün commit edilmesine yol açar.
 
 ## 7. Cyclomatic Complexity ve Cohesion

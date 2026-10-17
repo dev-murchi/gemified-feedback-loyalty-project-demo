@@ -8,8 +8,9 @@ Bu doküman, SDD'deki mimariyi Domain-Driven Design ile kodlanabilir hale getiri
 
 | Alan | Değer |
 | --- | --- |
-| Sürüm | 1.2 |
+| Sürüm | 1.3 |
 | Dayandığı dokümanlar | SRS v1.6, SDD v1.3, API sözleşmesi 0.2.7-demo |
+| Değişiklik (1.3) | `JobQueue` ve `JobHandler` port'ları, `OutboxStore` port'u ve `OutboxRelay` servisi shared kernel'e eklendi; `JobQueue` Analysis'in driven port'u olmaktan çıkarıldı (Analysis kuyruktaki analiz işlerini tüketir) |
 | Değişiklik (1.2) | Context'ler arası okuma: `RawTextSource`, `UnanalyzedReport`, `BranchDirectory`; Insights okuma modelinin yeri; `FeedbackText` kontrol karakterleri; shared kernel içeriği koda göre güncellendi. 24 saat kuralı: yorum her durumda `unanalyzed` olarak kapatılır ve kilit açılır; ödül yalnızca uygunsa, bütçe koruması kapalıysa ve son hata sağlayıcıya erişilememesiyse (SRS CR-007) |
 | Değişiklik (1.1) | Olay tiplerinin yeri: domain/events/, public/ yalnızca yeniden dışa aktarır |
 
@@ -26,7 +27,7 @@ Sistem altı bounded context'ten ve bilinçli olarak küçük tutulan bir shared
 | **Catalog** | Marka, şube, QR kodu, konu listeleri | Supporting | Referans verisi |
 | **Insights** | B2B istemcileri, markaya yönelik okuma modelleri ve raporlar | Supporting | Diğer context'lerin verisini markaya sunar |
 
-**Shared kernel** yalnızca şunları içerir: tipli kimlikler (`UserId`, `BrandId`, `BranchId`, `FeedbackId`); `Clock`, `IdGenerator`, `RandomSource`, `Logger` ve `UnitOfWork` port'ları; `AggregateRoot` (iyimser kilit sürümü), `DomainEvent`, `DomainError` ve `ConcurrencyConflictError` temel tipleri; `Result` tipi ve `retryOnConflict`; olay yönlendirme ve outbox kaydı tipleri. Port'ların bellek içi ve sistem uygulamaları `shared-kernel/adapters/` altındadır. İş kuralı içeren hiçbir şey shared kernel'e konmaz.
+**Shared kernel** yalnızca şunları içerir: tipli kimlikler (`UserId`, `BrandId`, `BranchId`, `FeedbackId`); `Clock`, `IdGenerator`, `RandomSource`, `Logger` ve `UnitOfWork` port'ları; `AggregateRoot` (iyimser kilit sürümü), `DomainEvent`, `DomainError` ve `ConcurrencyConflictError` temel tipleri; `Result` tipi ve `retryOnConflict`; olay yönlendirme ve outbox kaydı tipleri; `JobQueue` ve `JobHandler` port'ları, `OutboxStore` port'u ve `OutboxRelay` servisi (outbox kayıtlarını kuyruğa aktarır; ADR-005, ADR-020). Port'ların bellek içi ve sistem uygulamaları `shared-kernel/adapters/` altındadır. İş kuralı içeren hiçbir şey shared kernel'e konmaz.
 
 ## 3. Context Map
 
@@ -175,8 +176,8 @@ Eşzamanlı iki istek aynı satırı yüklerse ikisi de kuralı geçebilir; bunu
 | Değer nesneleri | `MaskedText`, `Sentiment`, `TopicKey`, `SpamReason`, `AnalysisVerdict`, `LlmUsage`, `MicroUsd`, `PromptVersion` |
 | Yayınlanan olaylar | `FeedbackAnalyzed` |
 | Open host service | `UnanalyzedReport`: 24 saatte analiz edilemeyen yorum için maskelenmiş metin (yoksa boş) ve ödüle izin verilip verilmediği |
-| Dinlenen olaylar | `FeedbackSubmitted` (kuyruk üzerinden) |
-| Driven port'lar | `FeedbackAnalysisRepository`, `SentimentAnalyzer` (ACL; OpenAI, Anthropic, Fake), `RawTextSource` (Feedback'in sağladığı çözme yeteneği), `LabelSetProvider`, `LlmSpendLedger`, `JobQueue`, `Clock` |
+| Dinlenen olaylar | `FeedbackSubmitted` (kuyruk üzerinden; analiz işlerini `AnalysisJobHandler` çalıştırır, kuyruk ve aktarıcı shared kernel'dedir) |
+| Driven port'lar | `FeedbackAnalysisRepository`, `SentimentAnalyzer` (ACL; OpenAI, Anthropic, Fake), `RawTextSource` (Feedback'in sağladığı çözme yeteneği), `LabelSetProvider`, `LlmSpendLedger`, `Clock` |
 | Use case'ler | `ProcessAnalysisJob` |
 
 `ProcessAnalysisJob` sırası: ön kontrol → maskeleme → LLM çağrısı (transaction **dışında**) → şema ve etiket seti doğrulaması → unit of work içinde sonucu kaydet ve `FeedbackAnalyzed` yayınla. LLM hatasında iş `RetryPolicy`'ye göre yeniden planlanır.
