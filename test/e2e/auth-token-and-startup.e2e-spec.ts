@@ -94,9 +94,15 @@ describe('start-up configuration (e2e)', () => {
     vi.stubEnv('RAW_TEXT_KEY', randomBytes(32).toString('base64'));
     vi.stubEnv('RAW_TEXT_KEY_ID', 'prod-1');
     vi.stubEnv('RATE_LIMIT_DRIVER', 'redis');
+    vi.stubEnv('B2B_JWT_PRIVATE_KEY', privateKeyPem());
+    vi.stubEnv('B2B_JWT_KEY_ID', 'prod-b2b-1');
+    vi.stubEnv('LLM_DRIVER', 'openai');
+    vi.stubEnv('OPENAI_API_KEY', 'sk-not-used-at-start-up');
+    vi.stubEnv('OPENAI_MODEL', 'a-model');
 
     // When the application starts
-    // Then it fails because of the development verifier
+    // Then it fails because of the development verifier, the only thing in this configuration
+    // that production refuses
     await expect(boot()).rejects.toThrow(/DevAttestationVerifier/);
   });
 
