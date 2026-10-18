@@ -9,7 +9,7 @@ Bu doküman, SDD'deki mimariyi Domain-Driven Design ile kodlanabilir hale getiri
 | Alan | Değer |
 | --- | --- |
 | Sürüm | 1.3 |
-| Dayandığı dokümanlar | SRS v1.6, SDD v1.3, API sözleşmesi 0.2.7-demo |
+| Dayandığı dokümanlar | SRS v1.6, SDD v1.4, API sözleşmesi (`docs/api/openapi.yaml`) |
 | Değişiklik (1.3) | `JobQueue` ve `JobHandler` port'ları, `OutboxStore` port'u ve `OutboxRelay` servisi shared kernel'e eklendi; `JobQueue` Analysis'in driven port'u olmaktan çıkarıldı (Analysis kuyruktaki analiz işlerini tüketir) |
 | Değişiklik (1.2) | Context'ler arası okuma: `RawTextSource`, `UnanalyzedReport`, `BranchDirectory`; Insights okuma modelinin yeri; `FeedbackText` kontrol karakterleri; shared kernel içeriği koda göre güncellendi. 24 saat kuralı: yorum her durumda `unanalyzed` olarak kapatılır ve kilit açılır; ödül yalnızca uygunsa, bütçe koruması kapalıysa ve son hata sağlayıcıya erişilememesiyse (SRS CR-007) |
 | Değişiklik (1.1) | Olay tiplerinin yeri: domain/events/, public/ yalnızca yeniden dışa aktarır |

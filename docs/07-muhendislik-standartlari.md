@@ -8,8 +8,8 @@ Bu doküman, kodun nasıl yazılacağını tanımlar: Clean Architecture katmanl
 
 | Alan | Değer |
 | --- | --- |
-| Sürüm | 1.15 |
-| Dayandığı dokümanlar | SDD v1.3, Alan Modeli v1.3, Test Stratejisi v1.4 |
+| Sürüm | 1.16 |
+| Dayandığı dokümanlar | SDD v1.4, Alan Modeli v1.3, Test Stratejisi v1.4 |
 | Değişiklik (1.1) | Test aracı Jest yerine Vitest: NestJS 12 yalnızca ESM; Vitest ESM'i doğal olarak destekler; dependency-cruiser'a `shared-kernel-is-pure` kuralı eklendi (shared kernel'i her domain dolaylı olarak içe aktarır) |
 | Değişiklik (1.2) | `shared-kernel/adapters/` (paylaşılan bellek içi UnitOfWork ve sistem saati) ve `test/support/` (FakeClock) eklendi; dependency-cruiser'a `core-does-not-use-shared-adapters` kuralı eklendi |
 | Değişiklik (1.3) | Olay erişim anahtarı (`takeEvents`, `src/shared-kernel/repository-access.ts`) ve `repository-access-only-in-outbound-adapters` kuralı; `InMemoryTable` satırları kopyalar; save sonrası sürüm kuralı (markSaved; uygulama S0-04) |
@@ -20,6 +20,7 @@ Bu doküman, kodun nasıl yazılacağını tanımlar: Clean Architecture katmanl
 | Değişiklik (1.8) | Context'e özgü erişim anahtarları (`*-access.ts`) ve `context-access-only-in-domain-and-outbound` kuralı; olay yönlendirmeleri yalnızca `src/composition/event-routes.ts` dosyasında, kayıttan sonra dondurulur |
 | Değişiklik (1.9) | Loglama shared kernel'deki `Logger` port'u üzerinden; alanlarda kişisel veri yok; testler `RecordingLogger` sahtesiyle |
 | Değişiklik (1.10) | Yayınlanan olay tipleri `domain/events/` içinde tanımlanır, `public/` yalnızca yeniden dışa aktarır; `domain-events-only-shared-kernel` kuralı |
+| Değişiklik (1.16) | `platform/` altına outbound `rate-limit/` (hız sınırlayıcı port'u, GCRA, bellek içi ve Redis adapter'ları) ve `redis/` (istek sırasında kullanılan, hızlı hata veren Redis istemcisi ve kesinti logu) eklendi; sürümlü LLM prompt'ları kök `prompts/` yerine ilgili context'in `adapters/outbound/prompts/` klasöründe; worker sürecinin kendi kök modülü (`WorkerAppModule`); §9: gerçek altyapıya karşı entegrasyon testleri o altyapının zamanlayıcılarına bağlı olabilir |
 | Değişiklik (1.15) | `Logger` port'una `info` eklendi; worker süreci başlangıç, Redis bağlantısı ve kapanış kayıtlarını bu port üzerinden yazar |
 | Değişiklik (1.14) | `platform/` ortak, framework veya kütüphaneye bağlı teknik altyapı olarak tanımlandı: inbound (`http/`) ve outbound (`queue/`: BullMQ `JobQueue` adapter'ı, Redis bağlantısı); §3 klasör ağacına `queue/` eklendi |
 | Değişiklik (1.13) | OAuth2 token uç noktasının hata biçimi istisnası (RFC 6749); Git akışı tek geliştiricili çalışmaya göre; araç listesi tamamlandı; dayanak sürümleri (SRS CR-007) |
@@ -47,7 +48,7 @@ Bu doküman, kodun nasıl yazılacağını tanımlar: Clean Architecture katmanl
 
 **Context'ler arası kural:** Bounded context'ler `src/contexts/<context>/` altındadır; `src/` altındaki diğer klasörler (`shared-kernel/`, `platform/`, `composition/`) context değildir. Bir context, başka bir context'in yalnızca `public` klasörünü kullanabilir. `public` klasörü yayınlanan olayları, open host service arayüzlerini ve bunların tiplerini içerir; aggregate'ler, use case'ler ve adapter'lar asla dışarı açılmaz. Yayınlanan olay tipleri context'in `domain/events/` klasöründe tanımlanır; `public/` bunları yalnızca yeniden dışa aktarır.
 
-**Platform:** `src/platform/`, context'lerden bağımsız, framework veya kütüphaneye bağlı ortak teknik altyapıdır. Inbound: `platform/http/` (Problem Details, hata kodu → HTTP tablosu, `X-Request-Id`, gövde sınırı, Zod yardımcısı, guard'lar). Outbound: `platform/queue/` (BullMQ `JobQueue` adapter'ı, Redis bağlantısı). Context'lerin adapter'ları ve composition kullanabilir; domain ve application kullanamaz. Platform hiçbir context'i içe aktarmaz ve iş kuralı içermez. Birden çok context'in kullandığı port'un (ör. `JobQueue`) kütüphaneye bağlı adapter'ı bir context'in `adapters/outbound/` klasöründe değil burada durur; shared kernel kütüphane kullanamaz.
+**Platform:** `src/platform/`, context'lerden bağımsız, framework veya kütüphaneye bağlı ortak teknik altyapıdır. Inbound: `platform/http/` (Problem Details, hata kodu → HTTP tablosu, `X-Request-Id`, gövde sınırı, Zod yardımcısı, guard'lar). Outbound: `platform/queue/` (BullMQ `JobQueue` adapter'ı, Redis bağlantısı), `platform/rate-limit/` (hız sınırlayıcı port'u, GCRA, bellek içi ve Redis adapter'ları, Redis kesintisinde isteklere izin veren sarmalayıcı) ve `platform/redis/` (istek sırasında kullanılan, hızlı hata veren Redis istemcisi; kesintiyi bir kez uyarı, düzelmeyi bir kez bilgi satırı olarak loglayan `OutageLog`). Context'lerin adapter'ları ve composition kullanabilir; domain ve application kullanamaz. Platform hiçbir context'i içe aktarmaz ve iş kuralı içermez. Birden çok context'in kullandığı port'un (ör. `JobQueue`) kütüphaneye bağlı adapter'ı bir context'in `adapters/outbound/` klasöründe değil burada durur; shared kernel kütüphane kullanamaz.
 
 ## 3. Klasör Yapısı
 
@@ -58,6 +59,8 @@ src/
   platform/
     http/                  # inbound: ortak HTTP altyapısı (NestJS, Zod)
     queue/                 # outbound: BullMQ JobQueue adapter'ı, Redis bağlantısı (bullmq, ioredis)
+    rate-limit/            # outbound: hız sınırlayıcı (GCRA; bellek içi ve Redis adapter'ları)
+    redis/                 # outbound: hızlı hata veren Redis istemcisi, kesinti logu
   contexts/
     identity/
       domain/
@@ -83,8 +86,9 @@ test/
   integration/             # gerçek PostgreSQL ve Redis ile adapter testleri
   e2e/                     # HTTP üzerinden uçtan uca senaryolar
 db/migrations/             # SQL göçleri
-prompts/                   # sürümlü LLM prompt'ları
 ```
+
+Sürümlü LLM prompt'ları kök dizinde değil, ilgili context'in `adapters/outbound/prompts/` klasöründedir (ör. `contexts/analysis/adapters/outbound/prompts/feedback-analysis-v1.ts`): derlemeyle birlikte gelir ve başlangıçta dosya okunmaz. API ve worker süreçlerinin kök modülleri `composition/` altındadır (`app.module.ts`, `worker-app.module.ts`); worker yalnızca işinin kullandığı modülleri yükler.
 
 **Adlandırma:** Dosyalar `kebab-case`; sınıflar ve tipler `PascalCase`; kod tanımlayıcıları yalnızca Alan Modeli'ndeki ortak dilden (`06`, Bölüm 4). Adapter dosyaları teknolojiyi önek alır: `pg-wallet.repository.ts`, `memory-wallet.repository.ts`, `openai.sentiment-analyzer.ts`. Domain kodu teknik türe göre değil aggregate'e göre gruplanır (`entities/`, `value-objects/` klasörleri kullanılmaz); birlikte değişen kod birlikte durur (Bölüm 7).
 
@@ -251,7 +255,8 @@ Test seviyeleri ve kritik senaryolar Test Stratejisi'ndedir (`04`). Kod yazarken
 - **Domain testleri** saf birim testleridir: veritabanı, framework ve sahte nesne (mock) kullanılmaz.
 - **Use case testleri** bellek içi adapter'larla (fake) yazılır; port'lar mock kütüphanesiyle taklit edilmez. Böylece testler davranışı doğrular, uygulama ayrıntısına bağlanmaz.
 - **Repository sözleşme testleri** bir kez yazılır; aynı test paketi önce bellek içi, sonra PostgreSQL adapter'ına karşı çalışır (ADR-017).
-- Zaman her zaman `FakeClock` ile kontrol edilir; testlerde gerçek saat ve `sleep` kullanılmaz.
+- Zaman her zaman `FakeClock` ile kontrol edilir; testlerde gerçek saat ve `sleep` kullanılmaz (tek istisna aşağıdaki madde).
+- **Gerçek altyapıya karşı entegrasyon testleri** (Testcontainers) o altyapının kendi zamanlayıcılarına bağlı olabilir: Redis anahtarının süresinin dolması, BullMQ'nun iş tüketimi gibi. Bu davranışı `FakeClock` değiştiremez. Böyle bir test sabit bir `sleep` yerine koşulu bekler (`waitFor`, üst sınırlı); uygulamanın kendi saati yine `FakeClock`'tur.
 - Test verisi builder'larla üretilir; testler birbirinin verisine bağımlı değildir.
 - Test adları davranışı anlatır: `rejects a second reward within 24 hours of the last rewarded submission`.
 - Her test Given / When / Then düzenindedir.

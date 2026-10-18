@@ -9,7 +9,7 @@ Bu doküman, Gereksinim Dokümanı v1.6'daki gereksinimlerin nasıl karşılanac
 | Alan | Değer |
 | --- | --- |
 | Doküman türü | Yazılım Tasarım Dokümanı (SDD) – MVP |
-| Sürüm | 1.3 (15 Ekim 2026: SRS CR-007 belirsizlik düzeltmeleri: 24 saat kuralı, silme talebi, platform kanıtının bağlandığı veri, kayıtta ret ve düşük güven ayrımı, kontrol karakterleri, demoda gösterilmeyen Must gereksinimler, eşzamanlılık ifadelerinin ADR-019 ile hizalanması; ekip önerisi, müşteri doğrulaması bekliyor). 1.2 (12 Ekim 2026: LEDGER_ENTRIES.xp_total_after; geliştirme sırasında, S0-06). 1.1 (11 Ekim 2026: geliştirme başlangıcı; ADR-019..021, alan modeliyle hizalama). 1.0: tasarım aşaması kapanış sürümü, 10 Ekim 2026 |
+| Sürüm | 1.4 (18 Ekim 2026: S0-10: hız sınırına takılan B2B çağrıları ve denetim kaydı (7.4), hız sınırlarının uygulanışı (7.3), prompt'un yeri (8.1), süreçlerin sırları ve üretimde Redis zorunluluğu (9.1), demo kapsamındaki hız sınırı satırı (11.1), sözleşme sürümü atfı (12); ekip önerisi, proje sahibi kararlarıyla). 1.3 (15 Ekim 2026: SRS CR-007 belirsizlik düzeltmeleri: 24 saat kuralı, silme talebi, platform kanıtının bağlandığı veri, kayıtta ret ve düşük güven ayrımı, kontrol karakterleri, demoda gösterilmeyen Must gereksinimler, eşzamanlılık ifadelerinin ADR-019 ile hizalanması; ekip önerisi, müşteri doğrulaması bekliyor). 1.2 (12 Ekim 2026: LEDGER_ENTRIES.xp_total_after; geliştirme sırasında, S0-06). 1.1 (11 Ekim 2026: geliştirme başlangıcı; ADR-019..021, alan modeliyle hizalama). 1.0: tasarım aşaması kapanış sürümü, 10 Ekim 2026 |
 | Dayandığı doküman | Gereksinim Dokümanı (SRS) v1.6 (`01-gereksinim-dokumani-SRS.md`) |
 | İlgili dokümanlar | Tehdit Modeli (`03-tehdit-modeli.md`), Test Stratejisi (`04-test-stratejisi.md`), Alan Modeli (`06-alan-modeli.md`), Mühendislik Standartları (`07-muhendislik-standartlari.md`), Sprint 0 Backlog (`08-sprint-0-backlog.md`) |
 | SDLC aşaması | Geliştirme (Sprint 0) |
@@ -503,14 +503,14 @@ Kanıt eksik veya geçersizse yorum reddedilmez, düşük güven modunda işleni
 | Veri merkezi kaynaklı IP (ASN) | İstek bağlamı | Bot şüphesi ağırlığı; tek başına engelleme sebebi değil |
 | Şube bazlı anomali | Yorum yoğunluğu | QR yayılması şüphesi (TZ-2) |
 
-Hız sınırları doğrulanmış cihaz anahtarına bağlıdır ve Redis'te GCRA ile uygulanır (FR-QR-06, ADR-016). Kimlik doğrulama öncesi uç noktalarda (challenge, kayıt, oturum) kimlik bulunmadığından geniş eşikli IP sınırları kullanılır. WAF'taki IP bazlı kurallar yalnızca açık saldırılara karşı geniş eşikli ikinci savunma hattıdır.
+Hız sınırları doğrulanmış kimliğe bağlıdır ve GCRA ile uygulanır (FR-QR-06, ADR-016): mobil çağrılarda cihaz anahtarına, B2B çağrılarında istemci kimliğine. Kimlik doğrulama öncesi uç noktalarda (challenge, kayıt, oturum ve B2B token) kimlik bulunmadığından geniş eşikli IP sınırları kullanılır; IPv6 adresleri /64 önekiyle sayılır, doğrulanmış bir cihaz IP'ye göre sayılmaz (CGNAT, T-D6). `X-Forwarded-For` yalnızca güvenilen proxy sayısı yapılandırıldığında (`TRUST_PROXY_HOPS`) dikkate alınır. Sınır değerleri yapılandırılır (başlangıç: cihaz dakikada 120, ani 30; B2B istemci 600 ve 100; IP 300 ve 100) ve sözleşmede yer almaz. Sınırlayıcı çok görevli dağıtımda Redis kullanır; üretimde bellek içi sürüm başlangıçta reddedilir. Redis'e erişilemezse sınırlayıcı açık kalır (istekler geçer, kesinti bir kez uyarı olarak loglanır): teknik bir sınır, bir kesintide API'yi kapatmamalıdır. Challenge store ise kapalı kalır (Redis yoksa `500 INTERNAL_ERROR`): saklanamayan bir challenge sonradan doğrulanamaz, bu yüzden verilmez. WAF'taki IP bazlı kurallar yalnızca açık saldırılara karşı geniş eşikli ikinci savunma hattıdır.
 
 ### 7.4 B2B Kimlik Doğrulama ve Kiracı İzolasyonu
 
 - **Token alma:** `POST /v1/b2b/oauth/token` (`grant_type=client_credentials`). İstemci sırrı yalnızca hash'lenmiş saklanır (NFR-SEC-03). Dönen JWT 15 dakika geçerlidir ve `brand_id` ile kapsamları taşır: `b2b.feedback.read`, `b2b.summary.read`.
 - **Rotasyon:** Bir markanın aynı anda birden çok etkin istemcisi olabilir; yeni istemci oluşturulur, marka geçiş yapar, eski istemci iptal edilir.
 - **Kiracı izolasyonu:** Marka kimliği yalnızca token'dan okunur, istek parametresinden asla alınmaz. B2B repository metotları zorunlu bir `BrandId` değer nesnesi alır; bu parametre olmadan sorgu yazılamaz. Başka markanın kaynağı için 404 döner (FR-B2B-08). Her uç nokta için çapraz kiracı izolasyon testi yazılır.
-- **Denetim:** Her erişim B2B_AUDIT_LOG'a yazılır (FR-B2B-09); istemci başına hız sınırı uygulanır.
+- **Denetim ve hız sınırı:** Her erişim B2B_AUDIT_LOG'a yazılır (FR-B2B-09). İstemci başına hız sınırı, token doğrulandıktan sonra ve kapsam kontrolünden önce uygulanır; böylece yetersiz kapsamla sürekli istek gönderen bir istemci de denetim kaydını dolduramaz (kapsam reddi, hız sınırını geçen istekte yine kayda yazılır). Hız sınırına takılan çağrı bir erişim değildir (hiçbir veri okunmaz) ve denetim kaydına yazılmaz: bir istek yağmuru denetim kaydını doldurmamalıdır. Bunun yerine her istemci için, sınırlandığı pencere başına (ilk reddinden itibaren 60 saniye) tek bir özet uyarı loglanır: istemci kimliği, en çok reddedilen uç nokta ve reddedilen çağrı sayısı. Uygulama kapanırken açık pencereler de loglanır. Özet süreç başınadır.
 
 ### 7.5 Uygulama Güvenliği
 
@@ -549,7 +549,7 @@ Hız sınırları doğrulanmış cihaz anahtarına bağlıdır ve Redis'te GCRA 
 | `isValid` | Metin anlamlı bir geri bildirim mi |
 | `spamReason` | `isValid = false` ise: `gibberish` (anlamsız), `off_topic` (konu dışı), `advertisement` (reklam), `other`; aksi halde `null` |
 
-Hakaret veya küfür içeren bir şikayet spam değildir; markanın görmesi gereken gerçek bir geri bildirimdir. Prompt metni repoda sürümlü olarak tutulur (`prompts/feedback-analysis/v1`) ve Sprint 0'da yazılır; model seçimi ADR-018'e göre yapılır.
+Hakaret veya küfür içeren bir şikayet spam değildir; markanın görmesi gereken gerçek bir geri bildirimdir. Prompt metni repoda sürümlü olarak tutulur (`src/contexts/analysis/adapters/outbound/prompts/feedback-analysis-v1.ts`; derlemeyle birlikte gelir, başlangıçta dosya okunmaz) ve S0-08'de v1 olarak yazıldı; model seçimi ADR-018'e göre yapılır.
 
 Sağlayıcı `SentimentAnalyzer` port'unun arkasındadır (FR-AI-06). Worker eşzamanlılığı, sağlayıcının dakika başına istek ve token limitlerine göre yapılandırılır; ardışık hatalarda devre kesici açılır ve işler gecikmeli yeniden denenir.
 
@@ -633,6 +633,8 @@ Kişisel veriler LLM'e gönderilmeden önce yer tutucularla değiştirilir (FR-A
 | Gözlemlenebilirlik | CloudWatch, OpenTelemetry (ADOT) + X-Ray | Loglar, metrikler, izler, alarmlar |
 | Dış erişim | NAT Gateway | LLM sağlayıcısı, Apple ve Google servislerine çıkış |
 
+**Süreçlerin sırları (en az yetki, NFR-SEC-06).** API ve worker aynı kod tabanından ayrı süreçler olarak çalışır ve yalnızca kendi işlerinin gerektirdiği sırları alır. API: JWT ve B2B imza anahtarları, ham metin anahtarı, `RATE_LIMIT_DRIVER=redis`, `CHALLENGE_STORE_DRIVER=redis` ve `REDIS_URL`. Worker (`WorkerAppModule`): ham metin anahtarı (analizde ham metni çözer), LLM ayarları (`LLM_DRIVER=openai`, `OPENAI_API_KEY`, `OPENAI_MODEL`), `QUEUE_DRIVER=bullmq` ve `REDIS_URL` (S0-11'den sonra veritabanı bağlantısı); JWT ve B2B imza anahtarları, hız sınırı ve challenge store ayarları worker'a verilmez ve worker'da yüklenmez. Üretimde bellek içi hız sınırlayıcı ve bellek içi challenge store reddedilir; her API görevi kendi sayacını ve kendi challenge'larını tutardı, bir görevde verilen challenge diğerinde kullanılamazdı.
+
 ### 9.2 Ortamlar
 
 | Ortam | Amaç | Not |
@@ -703,7 +705,7 @@ Demo, müşteri metnindeki beş modülün temel özelliklerini (SRS Bölüm 4) u
 | --- | --- |
 | FR-AUTH-06, FR-QR-10 | Kısmen: akış ve düşük güven modu gerçek; platform doğrulaması ve kanıt yerine geliştirme doğrulayıcısı |
 | FR-AUTH-07 | Gösterilmez: cihaz anahtarının iptali |
-| FR-QR-06 | Gösterilmez: doğrulanmış kimliğe bağlı hız sınırı (S0-10'da Should) |
+| FR-QR-06 | Uygulandı (S0-10: cihaz, B2B istemci ve kimlik doğrulama öncesi IP sınırı); demo senaryosunda gösterilmez |
 | FR-AI-11 | Kısmen: model, prompt ve etiket listesi sürümü kaydedilir; değerlendirme kapısı CI'da çalışmaz, model seçimi tek seferlik ölçümle yapılır (S0-13) |
 | FR-AI-12 | Gösterilmez: bütçe izleme ve bütçe koruması |
 | FR-GAM-07 | Gösterilmez: ödülün ters kayıtla geri alınması |
@@ -733,7 +735,7 @@ Tasarım aşaması 10 Ekim 2026'da ekip onayıyla kapatıldı. Demo kodundan ön
 
 | # | Konu | Durum | Nerede |
 | --- | --- | --- | --- |
-| 1 | API sözleşmesi | Yazıldı (0.2.0-demo; güncel sürüm 0.2.7-demo): 12 uç nokta, 17 hata kodu ve hata kataloğu; gözden geçirmede bulunan 13 sorun düzeltildi. Onaylandı; mock sunucuyla doğrulama Sprint 0'ın ilk adımı | `docs/api/openapi.yaml` |
+| 1 | API sözleşmesi | Yazıldı (0.2.0-demo; güncel sürüm `docs/api/openapi.yaml` dosyasında): 12 uç nokta, 17 hata kodu ve hata kataloğu; gözden geçirmede bulunan 13 sorun düzeltildi. Onaylandı; mock sunucuyla doğrulama Sprint 0'ın ilk adımı | `docs/api/openapi.yaml` |
 | 2 | ORM ve migration aracı | Ertelendi: veritabanı adapter'ı yazılırken seçilir | ADR-017 |
 | 3 | Deneme sınırı hatası | Giderildi: sliding log | 6.4, ADR-016 |
 | 4 | Modül iskeleti | Tanımlandı; kodu Sprint 0'da (S0-01) | `06`, `07`, `08` |

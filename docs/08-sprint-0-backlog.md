@@ -10,7 +10,7 @@ Demo kapsamındaki (SDD 11.1) beş modülün temel özelliklerini, Mühendislik 
 | --- | --- |
 | Başlangıç | 11 Ekim 2026 (sıfırdan) |
 | Zaman kutusu | Demo tarihi proje sahibiyle belirlenir; takım ilk günün sonunda hızını ölçüp kesme çizgisini (Bölüm 4) teyit eder |
-| Dayandığı dokümanlar | SDD v1.3 Bölüm 11, Alan Modeli v1.2, Mühendislik Standartları v1.13, Test Stratejisi v1.4 Bölüm 8 |
+| Dayandığı dokümanlar | SDD v1.4 Bölüm 11, Alan Modeli v1.3, Mühendislik Standartları v1.16, Test Stratejisi v1.4 Bölüm 8 |
 
 ## 2. Büyüklük ve Öncelik
 
@@ -92,8 +92,8 @@ S0-06, S0-05'ten önce yapılır (proje sahibi kararı, 11 Ekim 2026): her kulla
 
 - **İçerik:** Outbox aktarıcısı; `JobQueue` port'u ve BullMQ adapter'ı; ayrı worker süreci (`main.worker.ts`); süpürücü zamanlanmış iş (FR-AI-09).
 - **Bitiş kriterleri:** Bellek içi depo ve bellek içi kuyrukla, tek süreçte, outbox → aktarıcı → kuyruk → worker → analiz → ödül akışı uçtan uca çalışıyor. BullMQ adapter'ı aynı `JobQueue` sözleşme testlerini gerçek Redis'e karşı (Testcontainers) geçiyor. `main.worker.ts` başlıyor ve Redis'ten iş tüketiyor. İki ayrı süreçle uçtan uca test ortak bir veritabanı gerektirir; bu yüzden S0-11'dedir (SDD 11.2, ADR-017: veritabanı en son bağlanır).
-- **Should:** Redis challenge store'u; GCRA hız sınırlayıcı (ADR-016). Demo tek API süreciyle yapılacağı için bellek içi challenge store yeterlidir.
-- **Risk:** Challenge uç noktası için hız sınırlama (IP bazlı, kimlik doğrulama öncesi) yapılana kadar yalnızca bellek içi üst sınır korur (`MemoryChallengeStore`: bekleyen 10.000 challenge, sonrası `429 RATE_LIMITED`). Ödünleşim: bir saldırı, meşru challenge isteklerini 60 saniyeye kadar engelleyebilir; S0-10'daki IP başına sınırlama bunu ortadan kaldırır.
+- **Should (yapıldı):** Redis challenge store'u ve GCRA hız sınırlayıcı (ADR-016) yapıldı. Üretim ikisinin de Redis sürümünü ister: bellek içi hız sınırlayıcı ve bellek içi challenge store, `NODE_ENV=production` ile başlangıçta reddedilir (SDD 9.1: en az 2 API görevi). Demo tek süreçle bellek içi sürümlerle de çalışır.
+- **Risk (kapandı):** Challenge uç noktası artık IP başına geniş eşikli hız sınırına tabidir (dakikada 300, ani 100; IPv6 için /64 öneki) ve bekleyen challenge sayısı en fazla 10.000'dir. Bu üst sınır istek hızını değil belleği sınırlar; challenge store Redis'e geçtikten sonra da sürer ve API görevleri arasında ortak sayılır. Kalan ödünleşim: çok sayıda farklı adresten dağıtık bir saldırı üst sınırı doldurup meşru challenge isteklerini 60 saniyeye kadar `429 RATE_LIMITED` ile engelleyebilir; bu, WAF'ın geniş eşikli ikinci savunma hattının konusudur (SDD 7.3).
 
 ### S0-11 PostgreSQL adapter'ları
 
