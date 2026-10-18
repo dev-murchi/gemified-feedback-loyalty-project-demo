@@ -1,62 +1,39 @@
 import { Module } from '@nestjs/common';
-import type { BranchDirectory } from '../contexts/catalog/public/branch-directory.js';
-import type { QrResolver } from '../contexts/catalog/public/qr-resolver.js';
-import { FeedbackController } from '../contexts/feedback/adapters/inbound/http/feedback.controller.js';
-import {
-  GET_FEEDBACK_STATUS,
-  SUBMIT_FEEDBACK,
-} from '../contexts/feedback/adapters/inbound/http/tokens.js';
 import { LocalRawTextCipher } from '../contexts/feedback/adapters/outbound/local-raw-text.cipher.js';
 import { MemoryFeedbackRepository } from '../contexts/feedback/adapters/outbound/memory-feedback.repository.js';
 import { MemoryRewardCooldownRepository } from '../contexts/feedback/adapters/outbound/memory-reward-cooldown.repository.js';
-import { NodeHasher } from '../contexts/feedback/adapters/outbound/node-hasher.js';
 import { loadRawTextKey } from '../contexts/feedback/adapters/outbound/raw-text-key.js';
 import type { FeedbackRepository } from '../contexts/feedback/application/ports/feedback-repository.js';
 import type { RawTextCipher } from '../contexts/feedback/application/ports/raw-text-cipher.js';
 import type { RewardCooldownRepository } from '../contexts/feedback/application/ports/reward-cooldown-repository.js';
 import { ApplyAnalysisResult } from '../contexts/feedback/application/use-cases/apply-analysis-result.js';
 import { ReadRawText } from '../contexts/feedback/application/use-cases/read-raw-text.js';
-import { GetFeedbackStatus } from '../contexts/feedback/application/use-cases/get-feedback-status.js';
-import { SubmitFeedback } from '../contexts/feedback/application/use-cases/submit-feedback.js';
 import { DEFAULT_REWARD_LIMITS } from '../contexts/feedback/domain/reward-cooldown/reward-limits.js';
-import type { RewardLookup } from '../contexts/gamification/public/reward-lookup.js';
-import type { PlatformProofVerifier } from '../contexts/identity/public/platform-proof-verifier.js';
 import { CryptoRandomSource } from '../shared-kernel/adapters/crypto-random-source.js';
 import type { Logger } from '../shared-kernel/logger.js';
-import { AuthenticationModule } from './authentication.module.js';
-import { CatalogModule } from './catalog.module.js';
-import { GamificationModule } from './gamification.module.js';
-import { IdentityModule } from './identity.module.js';
 import type { InMemoryStore } from './in-memory-store.js';
 import {
   APPLY_ANALYSIS_RESULT,
-  BRANCH_DIRECTORY,
   FEEDBACK_REPOSITORY,
   IN_MEMORY_STORE,
   LOGGER,
-  PLATFORM_PROOF_VERIFIER,
-  QR_RESOLVER,
   RAW_TEXT_CIPHER,
   RAW_TEXT_SOURCE,
   REWARD_COOLDOWN_REPOSITORY,
-  REWARD_LOOKUP,
 } from './tokens.js';
 
 const random = new CryptoRandomSource();
 
 /**
- * Feedback wiring (in-memory until S0-11). The raw-text master key comes from RAW_TEXT_KEY and
- * RAW_TEXT_KEY_ID and is required in production. Exports ApplyAnalysisResult, which only
- * event-routes.ts registers, and RawTextSource for Analysis; the repositories stay inside.
+ * Feedback wiring that the API and the worker share (in-memory until S0-11): the repositories, the
+ * raw-text cipher, ApplyAnalysisResult and RawTextSource. The raw-text master key comes from
+ * RAW_TEXT_KEY and RAW_TEXT_KEY_ID and is required in production. It has no controller and needs no
+ * other context's module, so the worker can load it without any API-only secret (NFR-SEC-06); the
+ * HTTP side is in feedback-http.module.ts. ApplyAnalysisResult is registered only by
+ * event-routes.ts. The repositories and the cipher are exported for the sweeper module and the
+ * HTTP module, which need Feedback together with other contexts.
  */
 @Module({
-  imports: [
-    CatalogModule,
-    GamificationModule,
-    IdentityModule,
-    AuthenticationModule,
-  ],
-  controllers: [FeedbackController],
   providers: [
     {
       provide: FEEDBACK_REPOSITORY,
@@ -94,51 +71,6 @@ const random = new CryptoRandomSource();
         }),
     },
     {
-      provide: SUBMIT_FEEDBACK,
-      inject: [
-        FEEDBACK_REPOSITORY,
-        REWARD_COOLDOWN_REPOSITORY,
-        QR_RESOLVER,
-        PLATFORM_PROOF_VERIFIER,
-        RAW_TEXT_CIPHER,
-        IN_MEMORY_STORE,
-        LOGGER,
-      ],
-      useFactory: (
-        ...[feedbacks, cooldowns, qrCodes, proofs, cipher, store, logger]: [
-          FeedbackRepository,
-          RewardCooldownRepository,
-          QrResolver,
-          PlatformProofVerifier,
-          RawTextCipher,
-          InMemoryStore,
-          Logger,
-        ]
-      ) =>
-        new SubmitFeedback({
-          feedbacks,
-          cooldowns,
-          limits: DEFAULT_REWARD_LIMITS,
-          qrCodes,
-          proofs,
-          cipher,
-          hasher: new NodeHasher(),
-          uow: store.uow,
-          ids: store.ids,
-          clock: store.clock,
-          logger,
-        }),
-    },
-    {
-      provide: GET_FEEDBACK_STATUS,
-      inject: [FEEDBACK_REPOSITORY, BRANCH_DIRECTORY, REWARD_LOOKUP],
-      useFactory: (
-        feedbacks: FeedbackRepository,
-        branches: BranchDirectory,
-        rewards: RewardLookup,
-      ) => new GetFeedbackStatus({ feedbacks, branches, rewards }),
-    },
-    {
       provide: RAW_TEXT_SOURCE,
       inject: [FEEDBACK_REPOSITORY, RAW_TEXT_CIPHER],
       useFactory: (feedbacks: FeedbackRepository, cipher: RawTextCipher) =>
@@ -160,6 +92,7 @@ const random = new CryptoRandomSource();
     RAW_TEXT_SOURCE,
     FEEDBACK_REPOSITORY,
     REWARD_COOLDOWN_REPOSITORY,
+    RAW_TEXT_CIPHER,
   ],
 })
 export class FeedbackModule {}

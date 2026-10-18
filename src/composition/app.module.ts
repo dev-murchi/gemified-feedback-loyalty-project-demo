@@ -5,7 +5,7 @@ import { RateLimitModule } from './rate-limit.module.js';
 import { CatalogModule } from './catalog.module.js';
 import { GamificationModule } from './gamification.module.js';
 import { EventRoutesModule } from './event-routes.module.js';
-import { FeedbackModule } from './feedback.module.js';
+import { FeedbackHttpModule } from './feedback-http.module.js';
 import { IdentityModule } from './identity.module.js';
 import { InsightsModule } from './insights.module.js';
 import { WalletHttpModule } from './wallet-http.module.js';
@@ -20,7 +20,7 @@ import { WorkerModule } from './worker.module.js';
     GamificationModule,
     IdentityModule,
     WalletHttpModule,
-    FeedbackModule,
+    FeedbackHttpModule,
     AnalysisModule,
     InsightsModule,
     WorkerModule,

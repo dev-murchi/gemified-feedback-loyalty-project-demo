@@ -2,9 +2,9 @@ import { NestFactory } from '@nestjs/core';
 import type { INestApplicationContext } from '@nestjs/common';
 import type { Logger } from '../shared-kernel/logger.js';
 import { reasonOf } from '../shared-kernel/failure-reason.js';
-import { AppModule } from './app.module.js';
 import type { JobWorker } from './job-worker.js';
 import { JOB_WORKER, LOGGER } from './tokens.js';
+import { WorkerAppModule } from './worker-app.module.js';
 
 const DEFAULT_INTERVAL_MS = 1_000;
 /** Below the 30 s an ECS task gets between SIGTERM and SIGKILL. */
@@ -25,6 +25,8 @@ export interface RunWorkerOptions {
 }
 
 export interface RunningWorker {
+  /** The worker's application context (tests look inside it; the process only waits for `stopped`). */
+  readonly context: INestApplicationContext;
   /**
    * Settles when the worker has stopped after a signal. Rejects if it could not stop cleanly or
    * did not stop in time: the process should then exit with a failure code.
@@ -119,19 +121,24 @@ export function runWorker(
     };
     for (const signal of STOP_SIGNALS) signals.on(signal, onSignal);
   });
-  return { stopped };
+  return { context, stopped };
 }
 
 /**
- * The worker process (`main.worker.ts`): the same modules as the API, without an HTTP server. It
- * relays the outbox, consumes the queues and runs the sweeper until it is told to stop. Until the
- * PostgreSQL adapters (S0-11) the stores are in memory, so this process does not yet share data
- * with a separate API process.
+ * The worker process (`main.worker.ts`): the worker's own root module (WorkerAppModule, no HTTP
+ * server, none of the API-only modules) relays the outbox, consumes the queues and runs the sweeper
+ * until it is told to stop. Until the PostgreSQL adapters (S0-11) the stores are in memory, so this
+ * process does not yet share data with a separate API process.
  */
 export async function startWorker(
   env: NodeJS.ProcessEnv = process.env,
+  options: Pick<RunWorkerOptions, 'signals'> = {},
 ): Promise<RunningWorker> {
   const shutdownTimeoutMs = shutdownTimeoutFrom(env);
-  const context = await NestFactory.createApplicationContext(AppModule);
-  return runWorker(context, { shutdownTimeoutMs });
+  // A start-up error (a missing secret) rejects, and the process exits with code 1 after the error
+  // is printed; Nest's default would abort the process (SIGABRT, possibly a core dump).
+  const context = await NestFactory.createApplicationContext(WorkerAppModule, {
+    abortOnError: false,
+  });
+  return runWorker(context, { ...options, shutdownTimeoutMs });
 }

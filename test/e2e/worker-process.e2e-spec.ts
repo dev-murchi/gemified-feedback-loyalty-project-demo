@@ -9,13 +9,13 @@ import { Queue } from 'bullmq';
 import { randomUUID } from 'node:crypto';
 import { EventEmitter } from 'node:events';
 import type { StartedRedisContainer } from '@testcontainers/redis';
-import { AppModule } from '../../src/composition/app.module.js';
 import {
   runWorker,
   WorkerStopTimeoutError,
   type RunningWorker,
 } from '../../src/composition/start-worker.js';
 import { LOGGER, PROCESS_ANALYSIS_JOB } from '../../src/composition/tokens.js';
+import { WorkerAppModule } from '../../src/composition/worker-app.module.js';
 import type { ProcessAnalysisJob } from '../../src/contexts/analysis/application/use-cases/process-analysis-job.js';
 import { BullMqJobQueue } from '../../src/platform/queue/bullmq-job-queue.js';
 import { redisConnectionFrom } from '../../src/platform/queue/redis-connection.js';
@@ -38,14 +38,14 @@ describe('the worker process (main.worker.ts)', () => {
 
   afterAll(() => redis.stop());
 
-  /** Starts the worker of the whole application, optionally with its analysis job replaced. */
+  /** Starts the worker's own root module, optionally with its analysis job replaced. */
   const boot = async (
     options: {
       readonly processAnalysis?: Pick<ProcessAnalysisJob, 'execute'>;
       readonly shutdownTimeoutMs?: number;
     } = {},
   ): Promise<void> => {
-    let builder = Test.createTestingModule({ imports: [AppModule] })
+    let builder = Test.createTestingModule({ imports: [WorkerAppModule] })
       .overrideProvider(LOGGER)
       .useValue(logger);
     if (options.processAnalysis !== undefined)
