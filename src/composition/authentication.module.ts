@@ -5,6 +5,9 @@ import {
   BearerAuthGuard,
   type Authenticator,
 } from '../platform/http/bearer-auth.guard.js';
+import { RATE_LIMIT_ENFORCER } from '../platform/http/rate-limit.enforcer.js';
+import type { RateLimitEnforcer } from '../platform/http/rate-limit.enforcer.js';
+import { withDeviceLimit } from '../platform/http/rate-limited-authenticators.js';
 import { IdentityModule } from './identity.module.js';
 import { AUTHENTICATE_REQUEST } from './tokens.js';
 
@@ -18,14 +21,20 @@ const authenticatorFor = (
   },
 });
 
-/** What a module needs to guard its routes with BearerAuthGuard: import this module. */
+/**
+ * What a module needs to guard its routes with BearerAuthGuard: import this module. The
+ * authenticator counts every verified device against its rate limit (FR-QR-06).
+ */
 @Module({
   imports: [IdentityModule],
   providers: [
     {
       provide: AUTHENTICATOR,
-      inject: [AUTHENTICATE_REQUEST],
-      useFactory: authenticatorFor,
+      inject: [AUTHENTICATE_REQUEST, RATE_LIMIT_ENFORCER],
+      useFactory: (
+        authenticate: AuthenticateRequest,
+        limits: RateLimitEnforcer,
+      ) => withDeviceLimit(authenticatorFor(authenticate), limits),
     },
     BearerAuthGuard,
   ],

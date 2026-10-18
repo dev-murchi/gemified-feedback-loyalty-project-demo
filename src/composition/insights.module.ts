@@ -38,6 +38,15 @@ import {
   type ClientAccessRecorder,
   type ClientAuthenticator,
 } from '../platform/http/client-auth.guard.js';
+import {
+  RATE_LIMIT_ENFORCER,
+  type RateLimitEnforcer,
+} from '../platform/http/rate-limit.enforcer.js';
+import { withClientLimit } from '../platform/http/rate-limited-authenticators.js';
+import {
+  REFUSAL_SUMMARY,
+  type RefusalSummary,
+} from '../platform/http/refusal-summary.js';
 import type { Logger } from '../shared-kernel/logger.js';
 import { CatalogModule } from './catalog.module.js';
 import { loadDemoB2bClients } from './demo-b2b-clients.js';
@@ -179,8 +188,12 @@ const authenticatorFor = (tokens: B2bAccessTokens): ClientAuthenticator => ({
     },
     {
       provide: CLIENT_AUTHENTICATOR,
-      inject: [B2B_ACCESS_TOKENS],
-      useFactory: authenticatorFor,
+      inject: [B2B_ACCESS_TOKENS, RATE_LIMIT_ENFORCER, REFUSAL_SUMMARY],
+      useFactory: (
+        tokens: B2bAccessTokens,
+        limits: RateLimitEnforcer,
+        summary: RefusalSummary,
+      ) => withClientLimit(authenticatorFor(tokens), limits, summary),
     },
     ClientAuthGuard,
     {

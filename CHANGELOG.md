@@ -48,6 +48,7 @@ All notable changes to this project are recorded here. The format follows [Keep 
 
 ### Changed
 
+- API contract 0.2.8-demo: `429 RATE_LIMITED` (with a `Retry-After` header and `retryAfterSeconds`) is now declared on every operation, not only the four that had it. Flutter team: any call may answer 429, so honour `Retry-After` and don't retry earlier. The B2B token endpoint's 429 is Problem Details, the only response there outside RFC 6749. The contract states no limit values; they are configured per environment.
 - The e2e contract checker closes an `allOf` as a whole (`unevaluatedProperties: false`) instead of each branch, so `Topic` plus `count` is accepted while extra fields are still rejected. `configureHttp` also parses `application/x-www-form-urlencoded` (8 KB) for the OAuth2 token endpoint.
 - SRS v1.6, SDD v1.3, threat model v1.1, `docs/04` v1.4, `docs/06` v1.2, `docs/07` v1.13, API contract 0.2.6-demo and 0.2.7-demo: CR-007 ambiguity review (24-hour rule, off-schema LLM answers never rewarded, deletion leaves the ledger untouched, the proof also covers the Idempotency-Key, reject vs. low trust, control characters, the OAuth2 error format exception, demo gaps for Must requirements and test traceability).
 - API contract 0.2.5-demo: `X-Platform-Proof` documents the development-mode proof (ASN.1 DER ES256 over SHA-256(`Idempotency-Key` ‖ raw body bytes), signed with the device key `dk`); the proof binds the body and the key, and a reward needs normal trust plus a valid proof. No field or code changes.

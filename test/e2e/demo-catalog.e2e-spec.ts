@@ -46,6 +46,8 @@ describe('demo catalog wiring (e2e)', () => {
     // Given the demo flag in production
     vi.stubEnv('NODE_ENV', 'production');
     vi.stubEnv('DEMO_DATA', 'true');
+    // Production refuses the in-memory rate limiter too; this test is about the demo data.
+    vi.stubEnv('RATE_LIMIT_DRIVER', 'redis');
 
     // When the application starts
     // Then it fails

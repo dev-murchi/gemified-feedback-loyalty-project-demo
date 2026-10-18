@@ -1,10 +1,19 @@
-import { Controller, Header, HttpCode, Inject, Post } from '@nestjs/common';
+import {
+  Controller,
+  Header,
+  HttpCode,
+  Inject,
+  Post,
+  UseGuards,
+} from '@nestjs/common';
+import { IpRateLimitGuard } from '../../../../../platform/http/ip-rate-limit.guard.js';
 import { ProblemException } from '../../../../../platform/http/problem-exception.js';
 import type { CreateChallenge } from '../../../application/use-cases/create-challenge.js';
 import { CREATE_CHALLENGE } from './tokens.js';
 
 /** `POST /v1/auth/challenge`: a single-use nonce for registration or a session (FR-AUTH-03). */
 @Controller('v1/auth')
+@UseGuards(IpRateLimitGuard)
 export class ChallengeController {
   constructor(
     @Inject(CREATE_CHALLENGE) private readonly createChallenge: CreateChallenge,

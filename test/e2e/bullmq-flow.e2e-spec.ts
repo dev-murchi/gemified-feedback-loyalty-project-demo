@@ -22,6 +22,9 @@ describe('outbox → relay → BullMQ → worker → reward (e2e, real Redis)', 
     vi.stubEnv('QUEUE_DRIVER', 'bullmq');
     vi.stubEnv('REDIS_URL', redis.getConnectionUrl());
     vi.stubEnv('RUN_WORKER_IN_API', 'true');
+    // The test polls every 20 ms against a clock that stands still; the rate limit is not under test.
+    vi.stubEnv('RATE_LIMIT_DEVICE_PER_MINUTE', '600000');
+    vi.stubEnv('RATE_LIMIT_DEVICE_BURST', '100000');
     feedback = await startFeedbackApp();
   });
 

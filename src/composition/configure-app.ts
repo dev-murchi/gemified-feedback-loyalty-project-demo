@@ -2,7 +2,8 @@ import type { NestExpressApplication } from '@nestjs/platform-express';
 import { configureHttp } from '../platform/http/configure-http.js';
 import { RandomIdGenerator } from '../shared-kernel/adapters/random-id-generator.js';
 import type { Logger } from '../shared-kernel/logger.js';
-import { LOGGER } from './tokens.js';
+import type { RateLimitConfig } from './rate-limit-config.js';
+import { LOGGER, RATE_LIMIT_CONFIG } from './tokens.js';
 
 /**
  * The HTTP set-up every entry point of the API shares: main.api.ts and the e2e tests. The
@@ -12,5 +13,6 @@ export function configureApp(app: NestExpressApplication): void {
   configureHttp(app, {
     ids: new RandomIdGenerator(),
     logger: app.get<Logger>(LOGGER),
+    trustProxyHops: app.get<RateLimitConfig>(RATE_LIMIT_CONFIG).trustProxyHops,
   });
 }

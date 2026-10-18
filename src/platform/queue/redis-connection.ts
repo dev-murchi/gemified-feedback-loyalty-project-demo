@@ -20,3 +20,17 @@ export function redisConnectionFrom(url: string): RedisOptions {
     ...(parsed.protocol === 'rediss:' ? { tls: {} } : {}),
   };
 }
+
+/** The options a plain client needs: where Redis is and how to sign in. */
+export const plainClientOptions = (connection: RedisOptions) => ({
+  host: connection.host ?? 'localhost',
+  port: connection.port ?? 6379,
+  db: connection.db ?? 0,
+  ...(connection.username === undefined
+    ? {}
+    : { username: connection.username }),
+  ...(connection.password === undefined
+    ? {}
+    : { password: connection.password }),
+  ...(connection.tls === undefined ? {} : { tls: connection.tls as object }),
+});

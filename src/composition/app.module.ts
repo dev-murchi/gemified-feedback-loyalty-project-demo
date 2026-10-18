@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { AnalysisModule } from './analysis.module.js';
 import { PersistenceModule } from './persistence.module.js';
+import { RateLimitModule } from './rate-limit.module.js';
 import { CatalogModule } from './catalog.module.js';
 import { GamificationModule } from './gamification.module.js';
 import { EventRoutesModule } from './event-routes.module.js';
@@ -14,6 +15,7 @@ import { WorkerModule } from './worker.module.js';
 @Module({
   imports: [
     PersistenceModule,
+    RateLimitModule,
     CatalogModule,
     GamificationModule,
     IdentityModule,

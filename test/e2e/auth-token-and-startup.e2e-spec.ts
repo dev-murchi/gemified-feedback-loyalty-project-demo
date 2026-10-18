@@ -93,6 +93,7 @@ describe('start-up configuration (e2e)', () => {
     vi.stubEnv('JWT_KEY_ID', 'prod-1');
     vi.stubEnv('RAW_TEXT_KEY', randomBytes(32).toString('base64'));
     vi.stubEnv('RAW_TEXT_KEY_ID', 'prod-1');
+    vi.stubEnv('RATE_LIMIT_DRIVER', 'redis');
 
     // When the application starts
     // Then it fails because of the development verifier

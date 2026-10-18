@@ -55,3 +55,7 @@ export const OUTBOX_RELAY = Symbol('OutboxRelay');
 export const JOB_RUNTIME = Symbol('JobRuntime');
 export const JOB_WORKER = Symbol('JobWorker');
 export const SWEEP_UNANALYZED = Symbol('SweepUnanalyzed');
+
+export const RATE_LIMIT_CONFIG = Symbol('RateLimitConfig');
+export const RATE_LIMITER = Symbol('RateLimiter');
+export const REFUSAL_SUMMARY_SHUTDOWN = Symbol('RefusalSummaryShutdown');

@@ -6,9 +6,11 @@ import {
   Inject,
   Post,
   Res,
+  UseGuards,
 } from '@nestjs/common';
 import type { Response } from 'express';
 import type { z } from 'zod';
+import { IpRateLimitGuard } from '../../../../../platform/http/ip-rate-limit.guard.js';
 import { parseBody } from '../../../../../platform/http/parse-body.js';
 import { ProblemException } from '../../../../../platform/http/problem-exception.js';
 import type { DomainError } from '../../../../../shared-kernel/domain-error.js';
@@ -61,6 +63,7 @@ const evidenceOf = (
 
 /** `POST /v1/auth/register` and `/v1/auth/session`: both answer with the `Session` schema. */
 @Controller('v1/auth')
+@UseGuards(IpRateLimitGuard)
 export class SessionController {
   constructor(
     @Inject(REGISTER_DEVICE) private readonly registerDevice: RegisterDevice,

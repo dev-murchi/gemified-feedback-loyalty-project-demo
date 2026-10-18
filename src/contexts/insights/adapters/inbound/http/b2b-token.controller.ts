@@ -6,8 +6,10 @@ import {
   Post,
   Req,
   Res,
+  UseGuards,
 } from '@nestjs/common';
 import type { Request, Response } from 'express';
+import { IpRateLimitGuard } from '../../../../../platform/http/ip-rate-limit.guard.js';
 import type { IssueB2bToken } from '../../../application/use-cases/issue-b2b-token.js';
 import type { TokenRejection } from '../../../domain/b2b-client/token-errors.js';
 import { ISSUE_B2B_TOKEN } from './tokens.js';
@@ -38,6 +40,7 @@ const field = (
  * exception to Problem Details (docs/07 §6); X-Request-Id is still set by the platform.
  */
 @Controller('v1/b2b/oauth')
+@UseGuards(IpRateLimitGuard)
 export class B2bTokenController {
   constructor(@Inject(ISSUE_B2B_TOKEN) private readonly issue: IssueB2bToken) {}
 

@@ -27,8 +27,10 @@ export interface ClientPrincipal {
  * root with Insights' token verifier, so `platform/` imports no context.
  */
 export interface ClientAuthenticator {
+  /** `endpoint` is the route being called (see `endpointOf`); only logging decorators use it. */
   authenticate(
     authorization: string | undefined,
+    endpoint: string,
   ): Promise<Result<ClientPrincipal, DomainError>>;
 }
 
@@ -85,6 +87,7 @@ export class ClientAuthGuard implements CanActivate {
     const request = http.getRequest<Request>();
     const caller = await this.authenticator.authenticate(
       request.header('authorization'),
+      endpointOf(request),
     );
     if (!caller.ok) throw ProblemException.from(caller.error);
     if (!caller.value.scopes.includes(scope)) {

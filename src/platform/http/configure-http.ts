@@ -10,6 +10,11 @@ export const MAX_BODY = '8kb';
 export interface HttpDefaultsDeps {
   readonly ids: IdGenerator;
   readonly logger: Logger;
+  /**
+   * How many reverse proxies stand in front of the API and set X-Forwarded-For (TRUST_PROXY_HOPS).
+   * 0 or absent: the header is ignored and the socket address counts.
+   */
+  readonly trustProxyHops?: number;
 }
 
 /**
@@ -23,6 +28,8 @@ export function configureHttp(
 ): void {
   // Express announces itself in `X-Powered-By` by default; the API reveals nothing about its stack (T-I7).
   app.disable('x-powered-by');
+  if (deps.trustProxyHops !== undefined && deps.trustProxyHops > 0)
+    app.set('trust proxy', deps.trustProxyHops);
   app.use(requestIdMiddleware(deps.ids));
   app.useBodyParser('json', { limit: MAX_BODY });
   // The OAuth2 token endpoint takes application/x-www-form-urlencoded (RFC 6749 §4.4).

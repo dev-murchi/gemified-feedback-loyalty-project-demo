@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Geri Bildirim ve Sadakat Motoru API
-  version: 0.2.7-demo
+  version: 0.2.8-demo
   description: |
     Demo (Sprint 0) kapsamındaki uç noktaların sözleşmesi. Bu dosya, backend ile Flutter
     ekibi arasındaki anlaşmanın kaynağıdır (SDD ADR-006); uygulamanın ürettiği OpenAPI
@@ -12,7 +12,8 @@ info:
     - Tüm yanıtlar, hata yanıtları dahil, `X-Request-Id` başlığını taşır; istemci bu başlığı
       gönderirse aynı değer döner.
     - Hatalar RFC 9457 Problem Details biçimindedir (`application/problem+json`). Yalnızca OAuth2
-      token uç noktası, RFC 6749 gereği kendi hata biçimini kullanır.
+      token uç noktası, RFC 6749 gereği kendi hata biçimini kullanır; bu uç noktanın tek istisnası
+      Problem Details döndüren `429 RATE_LIMITED` yanıtıdır.
     - Problem Details'teki `title` ve `detail` alanları geliştiriciye yöneliktir ve kullanıcıya
       gösterilmez. Kullanıcıya gösterilecek metni uygulama, `code` alanına göre kendisi üretir.
     - Zaman damgaları ISO 8601 ve UTC'dir. B2B tarih filtreleri için saat dilimi kuralı
@@ -58,9 +59,15 @@ info:
 
     ## Hız sınırları
 
-    Kimliği doğrulanmış uç noktalarda hız sınırı cihaz anahtarına bağlıdır (SRS FR-QR-06).
-    Kimlik doğrulama öncesi uç noktalarda (`/v1/auth/challenge`, `/v1/auth/register`,
-    `/v1/auth/session`) henüz bir kimlik olmadığından geniş eşikli, IP bazlı sınırlar uygulanır.
+    Kimliği doğrulanmış uç noktalarda hız sınırı doğrulanmış kimliğe bağlıdır (SRS FR-QR-06):
+    mobil uç noktalarda cihaz anahtarına, B2B uç noktalarında istemciye. Kimlik doğrulama öncesi
+    uç noktalarda (`/v1/auth/challenge`, `/v1/auth/register`, `/v1/auth/session`,
+    `/v1/b2b/oauth/token`) henüz doğrulanmış bir kimlik olmadığından geniş eşikli, IP bazlı
+    sınırlar uygulanır; doğrulanmış bir cihaz IP'ye göre sayılmaz.
+
+    Sınır aşıldığında `429` ve `RATE_LIMITED` döner; yanıt `Retry-After` başlığını ve
+    `retryAfterSeconds` alanını taşır. Sınır değerleri ortama göre yapılandırılır; istemci
+    yalnızca Retry-After süresine uymalıdır.
 
     ## Bu sürümde bilinçli olarak bulunmayanlar
 
@@ -300,6 +307,7 @@ paths:
                 xpForNextLevel: 300
                 xpToNextLevel: 180
         '401': { $ref: '#/components/responses/Unauthorized' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
 
   /v1/feedbacks:
     post:
@@ -497,6 +505,7 @@ paths:
                     levelUp: null
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
 
   /v1/b2b/oauth/token:
     post:
@@ -507,6 +516,8 @@ paths:
         RFC 6749 client credentials akışı. Token 15 dakika geçerlidir. Bir markanın birden fazla
         istemcisi olabilir; anahtar rotasyonu yeni istemci oluşturulup eskisi iptal edilerek yapılır.
         Demo ortamında istemciler seed script'iyle tanımlanır.
+        Bu uç noktanın tek RFC 6749 dışı yanıtı `429`'dur: Problem Details (`RATE_LIMITED`) döner
+        ve `Retry-After` başlığı taşır.
       security: []
       requestBody:
         required: true
@@ -547,6 +558,7 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/OAuthError' }
               example: { error: invalid_client }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
 
   /v1/b2b/branches:
     get:
@@ -575,6 +587,7 @@ paths:
                 nextCursor: null
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
 
   /v1/b2b/feedbacks:
     get:
@@ -628,6 +641,7 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
 
   /v1/b2b/branches/{branchId}/summary:
     get:
@@ -676,6 +690,7 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
 
   /v1/b2b/heatmap:
     get:
@@ -713,6 +728,7 @@ paths:
         '400': { $ref: '#/components/responses/ValidationError' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
 
   /v1/b2b/topics:
     get:
@@ -743,6 +759,7 @@ paths:
                   - { key: other, name: 'Diğer' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
 
 components:
   securitySchemes:

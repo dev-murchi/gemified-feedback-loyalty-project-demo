@@ -1,6 +1,7 @@
 import type { RedisOptions } from 'bullmq';
 import { Redis } from 'ioredis';
 import type { Logger } from '../../shared-kernel/logger.js';
+import { plainClientOptions } from './redis-connection.js';
 
 export interface RedisMonitorDeps {
   readonly connection: RedisOptions;
@@ -13,20 +14,6 @@ export const endpointOf = (
 ): { readonly redisHost: string; readonly redisPort: number } => ({
   redisHost: connection.host ?? 'localhost',
   redisPort: connection.port ?? 6379,
-});
-
-/** The options a plain client needs: where Redis is and how to sign in. */
-const clientOptions = (connection: RedisOptions) => ({
-  host: connection.host ?? 'localhost',
-  port: connection.port ?? 6379,
-  db: connection.db ?? 0,
-  ...(connection.username === undefined
-    ? {}
-    : { username: connection.username }),
-  ...(connection.password === undefined
-    ? {}
-    : { password: connection.password }),
-  ...(connection.tls === undefined ? {} : { tls: connection.tls as object }),
 });
 
 /**
@@ -44,7 +31,7 @@ export class RedisMonitor {
 
   start(): void {
     if (this.#client !== undefined) return;
-    const client = new Redis(clientOptions(this.deps.connection));
+    const client = new Redis(plainClientOptions(this.deps.connection));
     client.on('ready', () => this.#up());
     client.on('close', () => this.#down());
     // Failures to connect are reported by BullMQ's own error events; this only keeps them from
