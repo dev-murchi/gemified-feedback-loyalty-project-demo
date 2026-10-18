@@ -1,32 +1,40 @@
 // What the log says about Redis: "Redis connected" once it is reachable, "Redis connection lost"
-// (warn) when a connected client drops, nothing when we close it ourselves.
+// (warn) when a connected client drops, nothing when we close it ourselves. The monitor connects
+// through a proxy that the test can cut: the run's Redis serves other test files and is never stopped.
 
-import type { StartedRedisContainer } from '@testcontainers/redis';
 import { RedisMonitor } from '../../../src/platform/queue/redis-monitor.js';
 import { RecordingLogger } from '../../support/recording-logger.js';
-import { connectionOf, startRedis } from '../../support/redis-container.js';
+import { freshRedis, type TestRedis } from '../../support/redis.js';
+import { startProxy, type TcpProxy } from '../../support/tcp-proxy.js';
 import { waitFor } from '../../support/wait-for.js';
 
 describe('RedisMonitor', () => {
-  let redis: StartedRedisContainer;
+  let redis: TestRedis;
+  let proxy: TcpProxy;
   let logger: RecordingLogger;
   let monitor: RedisMonitor;
 
+  beforeAll(async () => {
+    redis = await freshRedis();
+  });
+
+  afterAll(() => redis.release());
+
   beforeEach(async () => {
-    redis = await startRedis();
+    proxy = await startProxy({ host: redis.getHost(), port: redis.getPort() });
     logger = new RecordingLogger();
-    monitor = new RedisMonitor({ connection: connectionOf(redis), logger });
+    monitor = new RedisMonitor({
+      connection: { host: proxy.host, port: proxy.port },
+      logger,
+    });
   });
 
   afterEach(async () => {
     await monitor.stop();
-    await redis.stop().catch(() => undefined);
+    await proxy.cut();
   });
 
-  const endpoint = () => ({
-    redisHost: redis.getHost(),
-    redisPort: redis.getPort(),
-  });
+  const endpoint = () => ({ redisHost: proxy.host, redisPort: proxy.port });
 
   it('logs "Redis connected" once, with host and port only', async () => {
     monitor.start();
@@ -44,7 +52,7 @@ describe('RedisMonitor', () => {
     monitor.start();
     await waitFor(() => logger.infos.length === 1, 'the connection');
 
-    await redis.stop();
+    await proxy.cut();
 
     await waitFor(() => logger.warnings.length === 1, 'the loss');
     expect(logger.warnings).toEqual([

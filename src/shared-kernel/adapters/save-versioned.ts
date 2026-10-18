@@ -1,7 +1,7 @@
 import type { AggregateRoot } from '../aggregate-root.js';
 import { ConcurrencyConflictError } from '../concurrency-conflict-error.js';
-import { markSaved, takeEvents } from '../repository-access.js';
 import type { EventCollector } from '../unit-of-work.js';
+import { finishSave } from './finish-save.js';
 import type { InMemoryTable } from './in-memory-table.js';
 
 export interface VersionedRow {
@@ -52,8 +52,7 @@ export function commitVersioned<Row extends VersionedRow>(
 ): void {
   const version = write.storedVersion + 1;
   store.table.set(write.key, write.toRow(version));
-  store.events.collect(aggregate[takeEvents]());
-  aggregate[markSaved](version);
+  finishSave(store.events, aggregate, version);
 }
 
 /** Runs synchronous repository work and reports a thrown error as a rejected promise. */

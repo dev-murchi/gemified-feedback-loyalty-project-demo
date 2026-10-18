@@ -2,21 +2,20 @@
 // started from the real application share their limits, which is why SDD 9.1 (at least two
 // instances) needs Redis and not the in-memory limiter.
 
-import type { StartedRedisContainer } from '@testcontainers/redis';
 import request from 'supertest';
 import { problemOf } from '../support/auth-client.js';
-import { startRedis } from '../support/redis-container.js';
+import { freshRedis, type TestRedis } from '../support/redis.js';
 import { startApp, type RunningApp } from '../support/start-app.js';
 
 describe('rate limits shared by two API instances (e2e, real Redis)', () => {
-  let redis: StartedRedisContainer;
+  let redis: TestRedis;
   const instances: RunningApp[] = [];
 
   beforeAll(async () => {
-    redis = await startRedis();
+    redis = await freshRedis();
   });
 
-  afterAll(() => redis.stop());
+  afterAll(() => redis.release());
 
   beforeEach(() => {
     vi.stubEnv('RATE_LIMIT_DRIVER', 'redis');

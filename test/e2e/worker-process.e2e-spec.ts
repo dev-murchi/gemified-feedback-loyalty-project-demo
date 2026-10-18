@@ -8,7 +8,6 @@ import { Test } from '@nestjs/testing';
 import { Queue } from 'bullmq';
 import { randomUUID } from 'node:crypto';
 import { EventEmitter } from 'node:events';
-import type { StartedRedisContainer } from '@testcontainers/redis';
 import {
   runWorker,
   WorkerStopTimeoutError,
@@ -21,11 +20,11 @@ import { BullMqJobQueue } from '../../src/platform/queue/bullmq-job-queue.js';
 import { redisConnectionFrom } from '../../src/platform/queue/redis-connection.js';
 import { SystemClock } from '../../src/shared-kernel/adapters/system-clock.js';
 import { RecordingLogger } from '../support/recording-logger.js';
-import { startRedis } from '../support/redis-container.js';
+import { freshRedis, type TestRedis } from '../support/redis.js';
 import { waitFor } from '../support/wait-for.js';
 
 describe('the worker process (main.worker.ts)', () => {
-  let redis: StartedRedisContainer;
+  let redis: TestRedis;
   let logger: RecordingLogger;
   let signals: EventEmitter;
   let running: RunningWorker;
@@ -33,10 +32,10 @@ describe('the worker process (main.worker.ts)', () => {
   let counts: Queue;
 
   beforeAll(async () => {
-    redis = await startRedis();
+    redis = await freshRedis();
   });
 
-  afterAll(() => redis.stop());
+  afterAll(() => redis.release());
 
   /** Starts the worker's own root module, optionally with its analysis job replaced. */
   const boot = async (
@@ -63,7 +62,7 @@ describe('the worker process (main.worker.ts)', () => {
   };
 
   beforeEach(async () => {
-    await redis.executeCliCmd('flushall');
+    await redis.flush();
     vi.stubEnv('NODE_ENV', 'test');
     vi.stubEnv('QUEUE_DRIVER', 'bullmq');
     vi.stubEnv('REDIS_URL', redis.getConnectionUrl());
@@ -88,11 +87,8 @@ describe('the worker process (main.worker.ts)', () => {
     vi.unstubAllEnvs();
   });
 
-  /** Redis's own count of open client connections (ours, BullMQ's and the CLI call's). */
-  const connectedClients = async (): Promise<number> => {
-    const info = await redis.executeCliCmd('info', ['clients']);
-    return Number(/connected_clients:(\d+)/.exec(info)?.[1]);
-  };
+  /** Redis's own count of open client connections on this file's database (ours and BullMQ's). */
+  const connectedClients = (): Promise<number> => redis.clientCount();
 
   const messages = (): string[] => logger.infos.map((entry) => entry.message);
 

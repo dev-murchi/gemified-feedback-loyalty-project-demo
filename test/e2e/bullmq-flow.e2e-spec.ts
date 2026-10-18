@@ -3,20 +3,19 @@
 // worker consumes it from Redis, and the reward is given. The worker runs on its timer inside the
 // API process (RUN_WORKER_IN_API), so the API and the worker share one in-memory store until S0-11.
 
-import type { StartedRedisContainer } from '@testcontainers/redis';
 import { startFeedbackApp, type FeedbackApp } from '../support/feedback-app.js';
-import { startRedis } from '../support/redis-container.js';
+import { freshRedis, type TestRedis } from '../support/redis.js';
 import { waitFor } from '../support/wait-for.js';
 
 describe('outbox → relay → BullMQ → worker → reward (e2e, real Redis)', () => {
-  let redis: StartedRedisContainer;
+  let redis: TestRedis;
   let feedback: FeedbackApp;
 
   beforeAll(async () => {
-    redis = await startRedis();
+    redis = await freshRedis();
   });
 
-  afterAll(() => redis.stop());
+  afterAll(() => redis.release());
 
   beforeEach(async () => {
     vi.stubEnv('QUEUE_DRIVER', 'bullmq');

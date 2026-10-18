@@ -4,12 +4,12 @@
 
 ## 1. Amaç
 
-Bu doküman, gereksinimlerin (SRS v1.6) ve tasarım kararlarının (SDD v1.4) nasıl doğrulanacağını tanımlar. Odak, sistemin en pahalı hatalarıdır: çift veya kayıp ödül, markalar arası veri sızıntısı, sahte kimlikle ödül toplama ve fark edilmeden düşen AI kalitesi.
+Bu doküman, gereksinimlerin (SRS v1.6) ve tasarım kararlarının (SDD v1.5) nasıl doğrulanacağını tanımlar. Odak, sistemin en pahalı hatalarıdır: çift veya kayıp ödül, markalar arası veri sızıntısı, sahte kimlikle ödül toplama ve fark edilmeden düşen AI kalitesi.
 
 | Alan | Değer |
 | --- | --- |
 | Sürüm | 1.4 |
-| Dayandığı dokümanlar | SRS v1.6, SDD v1.4, Tehdit Modeli v1.1, API sözleşmesi (`docs/api/openapi.yaml`) |
+| Dayandığı dokümanlar | SRS v1.6, SDD v1.5, Tehdit Modeli v1.1, API sözleşmesi (`docs/api/openapi.yaml`) |
 | Değişiklik (1.4) | TC-AI-04 ve TC-AI-05: 24 saatte analiz edilemeyen yorum her durumda kapatılır; ödül yalnızca uygunsa ve bütçe koruması kapalıysa. TC-AI-11: şemaya aykırı yanıt nedeniyle analiz edilemeyen yorum ödülsüz kapatılır (SRS CR-007). TC-AUTH-04: imza geçersizse ret, platform kararı olumsuzsa düşük güven. US-06: silmede ledger değişmez. TC-QR-10..11, TC-GAM-07..08, TC-AUTH-10, TC-B2B-08..10, TC-AI-12..15, 3.7 Kişisel Veri: test karşılığı olmayan Must gereksinimler eşlendi. Bölüm 2: G-2 ifadesi ADR-019 ile hizalandı (SRS CR-007) |
 | Değişiklik (1.3) | Test aracı Jest yerine Vitest: NestJS 12 yalnızca ESM; Vitest ESM'i doğal olarak destekler |
 

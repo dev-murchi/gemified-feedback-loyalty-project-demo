@@ -1,30 +1,33 @@
 // What only Redis adds to the RateLimiter contract: the state is shared between API instances, it
 // expires when the caller is idle, and a Redis that is down does not stop requests (fail open).
 
-import type { StartedRedisContainer } from '@testcontainers/redis';
 import { Redis } from 'ioredis';
 import { FailOpenRateLimiter } from '../../../src/platform/rate-limit/fail-open-rate-limiter.js';
 import { RedisRateLimiter } from '../../../src/platform/rate-limit/redis-rate-limiter.js';
 import { createFailFastRedis } from '../../../src/platform/redis/fail-fast-redis.js';
 import { FakeClock } from '../../support/fake-clock.js';
 import { RecordingLogger } from '../../support/recording-logger.js';
-import { freshPrefix, startRedis } from '../../support/redis-container.js';
+import {
+  freshPrefix,
+  freshRedis,
+  type TestRedis,
+} from '../../support/redis.js';
 
 const POLICY = { perMinute: 6, burst: 3 };
 
 describe('RedisRateLimiter', () => {
-  let redis: StartedRedisContainer;
+  let redis: TestRedis;
   let raw: Redis;
   const opened: RedisRateLimiter[] = [];
 
   beforeAll(async () => {
-    redis = await startRedis();
-    raw = new Redis({ host: redis.getHost(), port: redis.getPort() });
+    redis = await freshRedis();
+    raw = new Redis(redis.connection);
   });
 
   afterAll(async () => {
     raw.disconnect();
-    await redis.stop();
+    await redis.release();
   });
 
   afterEach(async () => {
@@ -34,10 +37,7 @@ describe('RedisRateLimiter', () => {
   /** One API instance: its own connection, the shared clock and key prefix. */
   const instance = (clock: FakeClock, prefix: string): RedisRateLimiter => {
     const limiter = new RedisRateLimiter({
-      client: createFailFastRedis({
-        host: redis.getHost(),
-        port: redis.getPort(),
-      }),
+      client: createFailFastRedis(redis.connection),
       clock,
       prefix,
     });

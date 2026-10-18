@@ -8,8 +8,8 @@ Bu doküman, kodun nasıl yazılacağını tanımlar: Clean Architecture katmanl
 
 | Alan | Değer |
 | --- | --- |
-| Sürüm | 1.16 |
-| Dayandığı dokümanlar | SDD v1.4, Alan Modeli v1.3, Test Stratejisi v1.4 |
+| Sürüm | 1.17 |
+| Dayandığı dokümanlar | SDD v1.5, Alan Modeli v1.3, Test Stratejisi v1.4 |
 | Değişiklik (1.1) | Test aracı Jest yerine Vitest: NestJS 12 yalnızca ESM; Vitest ESM'i doğal olarak destekler; dependency-cruiser'a `shared-kernel-is-pure` kuralı eklendi (shared kernel'i her domain dolaylı olarak içe aktarır) |
 | Değişiklik (1.2) | `shared-kernel/adapters/` (paylaşılan bellek içi UnitOfWork ve sistem saati) ve `test/support/` (FakeClock) eklendi; dependency-cruiser'a `core-does-not-use-shared-adapters` kuralı eklendi |
 | Değişiklik (1.3) | Olay erişim anahtarı (`takeEvents`, `src/shared-kernel/repository-access.ts`) ve `repository-access-only-in-outbound-adapters` kuralı; `InMemoryTable` satırları kopyalar; save sonrası sürüm kuralı (markSaved; uygulama S0-04) |
@@ -20,6 +20,7 @@ Bu doküman, kodun nasıl yazılacağını tanımlar: Clean Architecture katmanl
 | Değişiklik (1.8) | Context'e özgü erişim anahtarları (`*-access.ts`) ve `context-access-only-in-domain-and-outbound` kuralı; olay yönlendirmeleri yalnızca `src/composition/event-routes.ts` dosyasında, kayıttan sonra dondurulur |
 | Değişiklik (1.9) | Loglama shared kernel'deki `Logger` port'u üzerinden; alanlarda kişisel veri yok; testler `RecordingLogger` sahtesiyle |
 | Değişiklik (1.10) | Yayınlanan olay tipleri `domain/events/` içinde tanımlanır, `public/` yalnızca yeniden dışa aktarır; `domain-events-only-shared-kernel` kuralı |
+| Değişiklik (1.17) | S0-11 dilim 1: `platform/postgres/` (PostgreSQL havuzu ve transaction'ı, `PgUnitOfWork`, outbox deposu: kira ve fencing, göç çalıştırıcı, iyimser kilit ve kısıt adı eşlemesi); `finishSave` ve olay dağıtımı `shared-kernel/adapters/` içinde; unit of work'e ait yazmalar transaction dışında reddedilir, aktarıcının deyimleri transaction içinde reddedilir; araç listesinde pg (ADR-022) |
 | Değişiklik (1.16) | `platform/` altına outbound `rate-limit/` (hız sınırlayıcı port'u, GCRA, bellek içi ve Redis adapter'ları) ve `redis/` (istek sırasında kullanılan, hızlı hata veren Redis istemcisi ve kesinti logu) eklendi; sürümlü LLM prompt'ları kök `prompts/` yerine ilgili context'in `adapters/outbound/prompts/` klasöründe; worker sürecinin kendi kök modülü (`WorkerAppModule`); §9: gerçek altyapıya karşı entegrasyon testleri o altyapının zamanlayıcılarına bağlı olabilir |
 | Değişiklik (1.15) | `Logger` port'una `info` eklendi; worker süreci başlangıç, Redis bağlantısı ve kapanış kayıtlarını bu port üzerinden yazar |
 | Değişiklik (1.14) | `platform/` ortak, framework veya kütüphaneye bağlı teknik altyapı olarak tanımlandı: inbound (`http/`) ve outbound (`queue/`: BullMQ `JobQueue` adapter'ı, Redis bağlantısı); §3 klasör ağacına `queue/` eklendi |
@@ -48,19 +49,20 @@ Bu doküman, kodun nasıl yazılacağını tanımlar: Clean Architecture katmanl
 
 **Context'ler arası kural:** Bounded context'ler `src/contexts/<context>/` altındadır; `src/` altındaki diğer klasörler (`shared-kernel/`, `platform/`, `composition/`) context değildir. Bir context, başka bir context'in yalnızca `public` klasörünü kullanabilir. `public` klasörü yayınlanan olayları, open host service arayüzlerini ve bunların tiplerini içerir; aggregate'ler, use case'ler ve adapter'lar asla dışarı açılmaz. Yayınlanan olay tipleri context'in `domain/events/` klasöründe tanımlanır; `public/` bunları yalnızca yeniden dışa aktarır.
 
-**Platform:** `src/platform/`, context'lerden bağımsız, framework veya kütüphaneye bağlı ortak teknik altyapıdır. Inbound: `platform/http/` (Problem Details, hata kodu → HTTP tablosu, `X-Request-Id`, gövde sınırı, Zod yardımcısı, guard'lar). Outbound: `platform/queue/` (BullMQ `JobQueue` adapter'ı, Redis bağlantısı), `platform/rate-limit/` (hız sınırlayıcı port'u, GCRA, bellek içi ve Redis adapter'ları, Redis kesintisinde isteklere izin veren sarmalayıcı) ve `platform/redis/` (istek sırasında kullanılan, hızlı hata veren Redis istemcisi; kesintiyi bir kez uyarı, düzelmeyi bir kez bilgi satırı olarak loglayan `OutageLog`). Context'lerin adapter'ları ve composition kullanabilir; domain ve application kullanamaz. Platform hiçbir context'i içe aktarmaz ve iş kuralı içermez. Birden çok context'in kullandığı port'un (ör. `JobQueue`) kütüphaneye bağlı adapter'ı bir context'in `adapters/outbound/` klasöründe değil burada durur; shared kernel kütüphane kullanamaz.
+**Platform:** `src/platform/`, context'lerden bağımsız, framework veya kütüphaneye bağlı ortak teknik altyapıdır. Inbound: `platform/http/` (Problem Details, hata kodu → HTTP tablosu, `X-Request-Id`, gövde sınırı, Zod yardımcısı, guard'lar). Outbound: `platform/queue/` (BullMQ `JobQueue` adapter'ı, Redis bağlantısı), `platform/rate-limit/` (hız sınırlayıcı port'u, GCRA, bellek içi ve Redis adapter'ları, Redis kesintisinde isteklere izin veren sarmalayıcı), `platform/redis/` (istek sırasında kullanılan, hızlı hata veren Redis istemcisi; kesintiyi bir kez uyarı, düzelmeyi bir kez bilgi satırı olarak loglayan `OutageLog`) ve `platform/postgres/` (PostgreSQL havuzu ve transaction'ı, `PgUnitOfWork`, outbox deposu, göç çalıştırıcısı, iyimser kilit yardımcısı ve kısıt adı eşlemesi; unit of work'e ait yazmalar transaction dışında reddedilir, aktarıcının deyimleri transaction içinde reddedilir). Context'lerin adapter'ları ve composition kullanabilir; domain ve application kullanamaz. Platform hiçbir context'i içe aktarmaz ve iş kuralı içermez. Birden çok context'in kullandığı port'un (ör. `JobQueue`) kütüphaneye bağlı adapter'ı bir context'in `adapters/outbound/` klasöründe değil burada durur; shared kernel kütüphane kullanamaz.
 
 ## 3. Klasör Yapısı
 
 ```
 src/
   shared-kernel/           # tipli kimlikler, Clock, Result, DomainEvent, DomainError, UnitOfWork (port ve tipler)
-    adapters/              # paylaşılan bellek içi UnitOfWork ve sistem saati (saf TypeScript)
+    adapters/              # paylaşılan bellek içi UnitOfWork, sistem saati, olay dağıtımı (deliverEvents) ve kaydetme adımı (saveVersioned, finishSave) (saf TypeScript)
   platform/
     http/                  # inbound: ortak HTTP altyapısı (NestJS, Zod)
     queue/                 # outbound: BullMQ JobQueue adapter'ı, Redis bağlantısı (bullmq, ioredis)
     rate-limit/            # outbound: hız sınırlayıcı (GCRA; bellek içi ve Redis adapter'ları)
     redis/                 # outbound: hızlı hata veren Redis istemcisi, kesinti logu
+    postgres/              # outbound: PostgreSQL havuzu ve transaction'ı, PgUnitOfWork, outbox deposu, göç çalıştırıcı, iyimser kilit ve kısıt adı eşlemesi (pg)
   contexts/
     identity/
       domain/
@@ -114,7 +116,7 @@ Sürümlü LLM prompt'ları kök dizinde değil, ilgili context'in `adapters/out
 
 **Domain servisleri:** Yalnızca tek bir entity'ye ait olmayan kurallar için kullanılır (`PiiMasker`, `LevelPolicy`, `RetryPolicy`). Durum tutmazlar.
 
-**Repository'ler:** Aggregate başına bir repository vardır. Arayüzü application katmanındaki `ports` klasöründedir ve domain nesneleri alıp döner. `save` iyimser kilitle yazar; sürüm uyuşmazsa `ConcurrencyConflictError` fırlatır ve unit of work geri alınır. Bellek içi repository'ler satırları `InMemoryTable` ile saklar; tablo satırları kopyalayarak yazar ve döndürür (`structuredClone`). Satırlar düz veridir (sınıf örneği veya fonksiyon içermez). Bu kural repository sözleşme testleriyle doğrulanır. Başarılı bir `save` sonrasında repository, bellekteki aggregate nesnesinin sürümünü saklanan sürüme eşitler (`aggregate[markSaved](version)`). Unit of work geri alınırsa nesne atılır ve yeniden yüklenir (ADR-019). Hiç saklanmamış bir aggregate'in sürümü 0'dır (yeni oluşturulmuş veya snapshot'tan geri yüklenmiş). Sürümü 0 olan aggregate kaydedilirken satır yoksa ekleme (insert) yapılır; satır varsa `ConcurrencyConflictError` fırlatır.
+**Repository'ler:** Aggregate başına bir repository vardır. Arayüzü application katmanındaki `ports` klasöründedir ve domain nesneleri alıp döner. `save` iyimser kilitle yazar; sürüm uyuşmazsa `ConcurrencyConflictError` fırlatır ve unit of work geri alınır. Bellek içi repository'ler satırları `InMemoryTable` ile saklar; tablo satırları kopyalayarak yazar ve döndürür (`structuredClone`). Satırlar düz veridir (sınıf örneği veya fonksiyon içermez). Bu kural repository sözleşme testleriyle doğrulanır. Başarılı bir `save` sonrasında repository, bellekteki aggregate nesnesinin sürümünü saklanan sürüme eşitler (`aggregate[markSaved](version)`). Unit of work geri alınırsa nesne atılır ve yeniden yüklenir (ADR-019). Hiç saklanmamış bir aggregate'in sürümü 0'dır (yeni oluşturulmuş veya snapshot'tan geri yüklenmiş). Sürümü 0 olan aggregate kaydedilirken satır yoksa ekleme (insert) yapılır; satır varsa `ConcurrencyConflictError` fırlatır. Her `save` aynı son adımla biter: aggregate'in olayları unit of work'e verilir ve aggregate'e saklanan sürüm yazılır (`finishSave`, `shared-kernel/adapters/`; bellek içi ve PostgreSQL adapter'ları aynı adımı kullanır). PostgreSQL adapter'ı sürümü `UPDATE … WHERE version = <yüklenen sürüm>` ile, sürüm 0 için `INSERT … ON CONFLICT (birincil anahtar) DO NOTHING` ile denetler; etkilenen satır sayısı 1 değilse `ConcurrencyConflictError` fırlatır. Unit of work'e ait yazmalar (`save`, outbox kaydı) transaction dışında çalıştırılırsa PostgreSQL adapter'ı hata fırlatır ve hiçbir şey yazmaz; aksi halde yazma kendiliğinden commit olur ve değişikliğin olayıyla birlikte tek transaction'da yazılması garantisi bozulur (ADR-005).
 
 **Anemik modele izin verilmez:** Use case'ler akışı yönetir (yükle, aggregate metodunu çağır, kaydet); iş kararı vermez. Use case içinde bir aggregate'in alanına bakarak `if` yazılıyorsa, o kural aggregate'e taşınmalıdır.
 
@@ -303,6 +305,7 @@ Test seviyeleri ve kritik senaryolar Test Stratejisi'ndedir (`04`). Kod yazarken
 | Statik analiz | ESLint (typescript-eslint), dependency-cruiser, Prettier |
 | HTTP sınırında biçim doğrulaması | Zod (yalnızca inbound adapter'larda) |
 | Erişim token'ı (ES256 JWT) | jose (yalnızca adapter'larda) |
+| PostgreSQL erişimi | pg (sürücü; elle yazılmış SQL ve `db/migrations`, ADR-022) |
 | TypeScript'i doğrudan çalıştırma (geliştirme) | tsx |
 | API sözleşmesi | Redocly CLI (lint), Prism (mock sunucu) |
 | Kuyruk | BullMQ (ADR-009) |

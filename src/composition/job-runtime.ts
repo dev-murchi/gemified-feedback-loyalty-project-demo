@@ -67,6 +67,7 @@ const relayOf = (deps: JobRuntimeDeps, queue: JobQueue): OutboxRelay =>
     queue,
     queues: deps.queues,
     clock: deps.clock,
+    logger: deps.logger,
   });
 
 function memoryRuntime(deps: JobRuntimeDeps): JobRuntime {

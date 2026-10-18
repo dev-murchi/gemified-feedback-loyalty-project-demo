@@ -3,7 +3,6 @@
 // JOB_FAILURE_BACKOFF. Nothing here sleeps: a test waits until the queue is settled (no job
 // waiting, delayed or active) and only then looks at what ran.
 
-import type { StartedRedisContainer } from '@testcontainers/redis';
 import { Queue } from 'bullmq';
 import { BullMqJobQueue } from '../../../src/platform/queue/bullmq-job-queue.js';
 import { SystemClock } from '../../../src/shared-kernel/adapters/system-clock.js';
@@ -14,10 +13,10 @@ import type {
 } from '../../../src/shared-kernel/job-handler.js';
 import { RecordingLogger } from '../../support/recording-logger.js';
 import {
-  connectionOf,
   freshPrefix,
-  startRedis,
-} from '../../support/redis-container.js';
+  freshRedis,
+  type TestRedis,
+} from '../../support/redis.js';
 import { waitFor } from '../../support/wait-for.js';
 
 const DONE: JobResult = { outcome: 'done' };
@@ -41,28 +40,28 @@ function scripted(script: (call: number) => JobResult | Error): {
 }
 
 describe('BullMqJobQueue consuming a queue (Redis)', () => {
-  let redis: StartedRedisContainer;
+  let redis: TestRedis;
   let queue: BullMqJobQueue;
   let counts: Queue;
   let logger: RecordingLogger;
 
   beforeAll(async () => {
-    redis = await startRedis();
+    redis = await freshRedis();
   });
 
-  afterAll(() => redis.stop());
+  afterAll(() => redis.release());
 
   beforeEach(() => {
     logger = new RecordingLogger();
     const prefix = freshPrefix();
     queue = new BullMqJobQueue({
-      connection: connectionOf(redis),
+      connection: redis.connection,
       clock: new SystemClock(),
       logger,
       prefix,
       failureDelayMs: () => 20,
     });
-    counts = new Queue('analysis', { connection: connectionOf(redis), prefix });
+    counts = new Queue('analysis', { connection: redis.connection, prefix });
   });
 
   afterEach(async () => {

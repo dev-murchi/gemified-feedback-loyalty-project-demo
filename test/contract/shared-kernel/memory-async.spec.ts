@@ -1,5 +1,5 @@
 // Runs the JobQueue and OutboxStore contracts against the in-memory adapters. BullMQ (slice 4) and
-// PostgreSQL (S0-11) run the same contracts.
+// PostgreSQL (test/integration/postgres/) run the same contracts.
 
 import { InMemoryTable } from '../../../src/shared-kernel/adapters/in-memory-table.js';
 import { MemoryJobQueue } from '../../../src/shared-kernel/adapters/memory-job-queue.js';
@@ -25,6 +25,13 @@ describe('OutboxStore (in-memory)', () => {
     return Promise.resolve({
       outbox: new MemoryOutboxStore(table),
       add: (record) => Promise.resolve(table.set(record.id, record)),
+      waiting: () =>
+        Promise.resolve(
+          table
+            .values()
+            .filter((record) => record.publishedAt === null)
+            .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime()),
+        ),
       dispose: () => Promise.resolve(),
     });
   });

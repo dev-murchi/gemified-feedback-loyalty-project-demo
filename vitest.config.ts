@@ -37,6 +37,8 @@ export default defineConfig({
         test: {
           name: 'integration',
           include: ['test/integration/**/*.spec.ts'],
+          // One PostgreSQL server with the migrated schema as a template for every file.
+          globalSetup: ['test/integration/global-setup.ts'],
           ...CONTAINER_TESTS,
         },
       },

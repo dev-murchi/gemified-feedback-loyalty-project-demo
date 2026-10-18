@@ -8,7 +8,6 @@ import { randomBytes, randomUUID } from 'node:crypto';
 import { EventEmitter } from 'node:events';
 import { Logger } from '@nestjs/common';
 import { Queue } from 'bullmq';
-import type { StartedRedisContainer } from '@testcontainers/redis';
 import {
   startWorker,
   type RunningWorker,
@@ -34,11 +33,11 @@ import {
   type FakeOpenAiServer,
 } from '../support/fake-openai-server.js';
 import { RecordingLogger } from '../support/recording-logger.js';
-import { startRedis } from '../support/redis-container.js';
+import { freshRedis, type TestRedis } from '../support/redis.js';
 import { waitFor } from '../support/wait-for.js';
 
 describe('the worker process in production, with only its own secrets (NFR-SEC-06)', () => {
-  let redis: StartedRedisContainer;
+  let redis: TestRedis;
   let provider: FakeOpenAiServer;
   let signals: EventEmitter;
   let running: RunningWorker | undefined;
@@ -47,13 +46,13 @@ describe('the worker process in production, with only its own secrets (NFR-SEC-0
   let lines: string[];
 
   beforeAll(async () => {
-    redis = await startRedis();
+    redis = await freshRedis();
     provider = await startFakeOpenAi();
   });
 
   afterAll(async () => {
     await provider.close();
-    await redis.stop();
+    await redis.release();
   });
 
   /** What the worker needs and nothing else; every API-only setting is empty. */
@@ -81,7 +80,7 @@ describe('the worker process in production, with only its own secrets (NFR-SEC-0
   };
 
   beforeEach(async () => {
-    await redis.executeCliCmd('flushall');
+    await redis.flush();
     stubWorkerEnvironment();
     signals = new EventEmitter();
     running = undefined;

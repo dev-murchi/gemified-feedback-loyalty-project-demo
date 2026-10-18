@@ -3,7 +3,6 @@
 // is an error, not a free pass.
 
 import { randomUUID } from 'node:crypto';
-import type { StartedRedisContainer } from '@testcontainers/redis';
 import { Redis } from 'ioredis';
 import { OutageLoggingChallengeStore } from '../../../src/contexts/identity/adapters/outbound/outage-logging-challenge.store.js';
 import { RedisChallengeStore } from '../../../src/contexts/identity/adapters/outbound/redis-challenge.store.js';
@@ -14,23 +13,23 @@ import { createFailFastRedis } from '../../../src/platform/redis/fail-fast-redis
 import { FakeClock } from '../../support/fake-clock.js';
 import { RecordingLogger } from '../../support/recording-logger.js';
 import { redisChallengeStore } from '../../support/redis-challenge-store.js';
-import { startRedis } from '../../support/redis-container.js';
+import { freshRedis, type TestRedis } from '../../support/redis.js';
 import { SequentialRandomSource } from '../../support/sequential-random-source.js';
 import { waitFor } from '../../support/wait-for.js';
 
 describe('RedisChallengeStore', () => {
-  let redis: StartedRedisContainer;
+  let redis: TestRedis;
   let raw: Redis;
   const opened: RedisChallengeStore[] = [];
 
   beforeAll(async () => {
-    redis = await startRedis();
-    raw = new Redis({ host: redis.getHost(), port: redis.getPort() });
+    redis = await freshRedis();
+    raw = new Redis(redis.connection);
   });
 
   afterAll(async () => {
     raw.disconnect();
-    await redis.stop();
+    await redis.release();
   });
 
   afterEach(async () => {

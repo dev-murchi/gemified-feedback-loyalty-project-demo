@@ -1,5 +1,6 @@
 import type { Clock } from '../clock.js';
 import type { DomainEvent } from '../domain-event.js';
+import { deliverEvents } from './event-delivery.js';
 import type { EventRouting } from '../event-routing.js';
 import type { IdGenerator } from '../id-generator.js';
 import type { OutboxRecord } from '../outbox-record.js';
@@ -60,39 +61,14 @@ export class InMemoryUnitOfWork implements UnitOfWork, EventCollector {
     }
   }
 
-  /** Handlers may record new events; the loop delivers those too, in order. */
-  async #deliverPending(): Promise<void> {
-    for (
-      let event = this.#pending.shift();
-      event;
-      event = this.#pending.shift()
-    ) {
-      await this.#deliver(event);
-    }
-  }
-
-  async #deliver(event: DomainEvent): Promise<void> {
-    const route = this.#deps.routes.routeFor(event.type);
-    if (route === undefined)
-      throw new Error(`No route for event type "${event.type}"`);
-    if ('outbox' in route) {
-      this.#writeToOutbox(event);
-      return;
-    }
-    for (const handler of route.sync) await handler.handle(event);
-  }
-
-  #writeToOutbox(event: DomainEvent): void {
-    const record: OutboxRecord = {
-      id: this.#deps.ids.next(),
-      eventType: event.type,
-      aggregateId: event.aggregateId,
-      payload: event,
-      createdAt: this.#deps.clock.now(),
-      attempts: 0,
-      lastError: null,
-      publishedAt: null,
-    };
-    this.#deps.outbox.set(record.id, record);
+  /** Handlers may record new events; deliverEvents delivers those too, in order. */
+  #deliverPending(): Promise<void> {
+    return deliverEvents(this.#pending, {
+      routes: this.#deps.routes,
+      clock: this.#deps.clock,
+      ids: this.#deps.ids,
+      writeToOutbox: (record) =>
+        Promise.resolve(this.#deps.outbox.set(record.id, record)),
+    });
   }
 }

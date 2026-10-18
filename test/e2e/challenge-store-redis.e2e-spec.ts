@@ -2,21 +2,20 @@
 // 9.1 runs at least two), and a Redis that is down is a 500, never a challenge nobody can verify.
 // Every response is also checked against the contract.
 
-import type { StartedRedisContainer } from '@testcontainers/redis';
 import { AuthClient, problemOf } from '../support/auth-client.js';
 import { FakeDevice } from '../support/fake-device.js';
-import { startRedis } from '../support/redis-container.js';
+import { freshRedis, type TestRedis } from '../support/redis.js';
 import { startApp, type RunningApp } from '../support/start-app.js';
 
 describe('challenges shared by two API instances (e2e, real Redis)', () => {
-  let redis: StartedRedisContainer;
+  let redis: TestRedis;
   const instances: RunningApp[] = [];
 
   beforeAll(async () => {
-    redis = await startRedis();
+    redis = await freshRedis();
   });
 
-  afterAll(() => redis.stop());
+  afterAll(() => redis.release());
 
   beforeEach(() => {
     vi.stubEnv('CHALLENGE_STORE_DRIVER', 'redis');

@@ -10,7 +10,7 @@ Demo kapsamındaki (SDD 11.1) beş modülün temel özelliklerini, Mühendislik 
 | --- | --- |
 | Başlangıç | 11 Ekim 2026 (sıfırdan) |
 | Zaman kutusu | Demo tarihi proje sahibiyle belirlenir; takım ilk günün sonunda hızını ölçüp kesme çizgisini (Bölüm 4) teyit eder |
-| Dayandığı dokümanlar | SDD v1.4 Bölüm 11, Alan Modeli v1.3, Mühendislik Standartları v1.16, Test Stratejisi v1.4 Bölüm 8 |
+| Dayandığı dokümanlar | SDD v1.5 Bölüm 11, Alan Modeli v1.3, Mühendislik Standartları v1.17, Test Stratejisi v1.4 Bölüm 8 |
 
 ## 2. Büyüklük ve Öncelik
 
