@@ -94,6 +94,7 @@ describe('start-up configuration (e2e)', () => {
     vi.stubEnv('RAW_TEXT_KEY', randomBytes(32).toString('base64'));
     vi.stubEnv('RAW_TEXT_KEY_ID', 'prod-1');
     vi.stubEnv('RATE_LIMIT_DRIVER', 'redis');
+    vi.stubEnv('CHALLENGE_STORE_DRIVER', 'redis');
     vi.stubEnv('B2B_JWT_PRIVATE_KEY', privateKeyPem());
     vi.stubEnv('B2B_JWT_KEY_ID', 'prod-b2b-1');
     vi.stubEnv('LLM_DRIVER', 'openai');

@@ -2,10 +2,8 @@
 // in-memory limiter runs the same cases in test/contract/platform.
 
 import type { StartedRedisContainer } from '@testcontainers/redis';
-import {
-  RedisRateLimiter,
-  createRateLimitRedis,
-} from '../../../src/platform/rate-limit/redis-rate-limiter.js';
+import { RedisRateLimiter } from '../../../src/platform/rate-limit/redis-rate-limiter.js';
+import { createFailFastRedis } from '../../../src/platform/redis/fail-fast-redis.js';
 import { rateLimiterContract } from '../../contract/support/rate-limiter.contract.js';
 import { FakeClock } from '../../support/fake-clock.js';
 import { freshPrefix, startRedis } from '../../support/redis-container.js';
@@ -22,7 +20,7 @@ describe('RateLimiter (Redis)', () => {
   rateLimiterContract(() => {
     const clock = new FakeClock();
     const limiter = new RedisRateLimiter({
-      client: createRateLimitRedis({
+      client: createFailFastRedis({
         host: redis.getHost(),
         port: redis.getPort(),
       }),

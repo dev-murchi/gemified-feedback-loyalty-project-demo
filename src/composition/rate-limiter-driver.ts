@@ -2,10 +2,8 @@ import type { OnModuleDestroy } from '@nestjs/common';
 import { FailOpenRateLimiter } from '../platform/rate-limit/fail-open-rate-limiter.js';
 import { MemoryRateLimiter } from '../platform/rate-limit/memory-rate-limiter.js';
 import type { RateLimiter } from '../platform/rate-limit/rate-limiter.js';
-import {
-  RedisRateLimiter,
-  createRateLimitRedis,
-} from '../platform/rate-limit/redis-rate-limiter.js';
+import { RedisRateLimiter } from '../platform/rate-limit/redis-rate-limiter.js';
+import { createFailFastRedis } from '../platform/redis/fail-fast-redis.js';
 import { redisConnectionFrom } from '../platform/queue/redis-connection.js';
 import type { Clock } from '../shared-kernel/clock.js';
 import type { Logger } from '../shared-kernel/logger.js';
@@ -25,7 +23,7 @@ export function createRateLimiter(
   if (config.driver === 'memory')
     return new MemoryRateLimiter({ clock: deps.clock });
   const redis = new RedisRateLimiter({
-    client: createRateLimitRedis(redisConnectionFrom(config.redisUrl)),
+    client: createFailFastRedis(redisConnectionFrom(config.redisUrl)),
     clock: deps.clock,
   });
   const guarded = new FailOpenRateLimiter({

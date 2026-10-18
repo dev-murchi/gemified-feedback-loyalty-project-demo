@@ -1,4 +1,5 @@
 import type { Logger } from '../../shared-kernel/logger.js';
+import { OutageLog } from '../redis/outage-log.js';
 import type {
   RateLimitDecision,
   RateLimitPolicy,
@@ -16,9 +17,15 @@ export interface FailOpenRateLimiterDeps {
  * (info), not once per request. Keys, which hold device ids and IP addresses, are never logged (T-I4).
  */
 export class FailOpenRateLimiter implements RateLimiter {
-  #down = false;
+  readonly #outage: OutageLog;
 
-  constructor(private readonly deps: FailOpenRateLimiterDeps) {}
+  constructor(private readonly deps: FailOpenRateLimiterDeps) {
+    this.#outage = new OutageLog({
+      logger: deps.logger,
+      down: 'Rate limiter unavailable; allowing requests',
+      up: 'Rate limiter available again',
+    });
+  }
 
   async check(
     key: string,
@@ -26,25 +33,11 @@ export class FailOpenRateLimiter implements RateLimiter {
   ): Promise<RateLimitDecision> {
     try {
       const decision = await this.deps.inner.check(key, policy);
-      this.#recovered();
+      this.#outage.recovered();
       return decision;
     } catch (error) {
-      this.#failed(error);
+      this.#outage.failed(error);
       return { allowed: true };
     }
-  }
-
-  #failed(error: unknown): void {
-    if (this.#down) return;
-    this.#down = true;
-    this.deps.logger.warn('Rate limiter unavailable; allowing requests', {
-      error: error instanceof Error ? error.name : typeof error,
-    });
-  }
-
-  #recovered(): void {
-    if (!this.#down) return;
-    this.#down = false;
-    this.deps.logger.info('Rate limiter available again');
   }
 }

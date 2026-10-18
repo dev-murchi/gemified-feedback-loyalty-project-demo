@@ -12,7 +12,6 @@ import { DevAttestationVerifier } from '../contexts/identity/adapters/outbound/d
 import { DevRequestProofVerifier } from '../contexts/identity/adapters/outbound/dev-request-proof.verifier.js';
 import { DevSessionProofVerifier } from '../contexts/identity/adapters/outbound/dev-session-proof.verifier.js';
 import { JoseAccessTokens } from '../contexts/identity/adapters/outbound/jose-access-tokens.js';
-import { MemoryChallengeStore } from '../contexts/identity/adapters/outbound/memory-challenge.store.js';
 import { MemoryUserRepository } from '../contexts/identity/adapters/outbound/memory-user.repository.js';
 import {
   loadSigningKey,
@@ -31,6 +30,7 @@ import type { WalletReader } from '../contexts/gamification/public/wallet-reader
 import { UserId } from '../shared-kernel/ids.js';
 import { CryptoRandomSource } from '../shared-kernel/adapters/crypto-random-source.js';
 import type { Logger } from '../shared-kernel/logger.js';
+import { createChallengeStore } from './challenge-store-driver.js';
 import { GamificationModule } from './gamification.module.js';
 import type { InMemoryStore } from './in-memory-store.js';
 import {
@@ -73,9 +73,9 @@ const walletReaderFor = (wallets: WalletReader): SessionWalletReader => ({
     },
     {
       provide: CHALLENGE_STORE,
-      inject: [IN_MEMORY_STORE],
-      useFactory: (store: InMemoryStore) =>
-        new MemoryChallengeStore({ clock: store.clock }),
+      inject: [IN_MEMORY_STORE, LOGGER],
+      useFactory: (store: InMemoryStore, logger: Logger) =>
+        createChallengeStore(process.env, { clock: store.clock, logger }),
     },
     {
       provide: ATTESTATION_VERIFIER,

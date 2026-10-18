@@ -52,17 +52,24 @@ export function memoryIdentityHarness(): Promise<IdentityHarness> {
   });
 }
 
-/** What a ChallengeStore contract test needs; the Redis harness (S0-10, Should) has the same shape. */
+/** What a ChallengeStore contract test needs; the Redis harness has the same shape. */
 export interface ChallengeStoreHarness {
   readonly store: ChallengeStore;
   readonly clock: FakeClock;
   dispose(): Promise<void>;
 }
 
-export function memoryChallengeStoreHarness(): Promise<ChallengeStoreHarness> {
+/** `maxLive` is the cap on waiting challenges; the store's default if omitted. */
+export interface ChallengeStoreOptions {
+  readonly maxLive?: number;
+}
+
+export function memoryChallengeStoreHarness(
+  options: ChallengeStoreOptions = {},
+): Promise<ChallengeStoreHarness> {
   const clock = new FakeClock();
   return Promise.resolve({
-    store: new MemoryChallengeStore({ clock }),
+    store: new MemoryChallengeStore({ clock, ...options }),
     clock,
     dispose: () => Promise.resolve(),
   });

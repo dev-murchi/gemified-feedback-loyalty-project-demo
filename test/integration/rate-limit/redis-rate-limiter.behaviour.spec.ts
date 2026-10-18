@@ -4,10 +4,8 @@
 import type { StartedRedisContainer } from '@testcontainers/redis';
 import { Redis } from 'ioredis';
 import { FailOpenRateLimiter } from '../../../src/platform/rate-limit/fail-open-rate-limiter.js';
-import {
-  RedisRateLimiter,
-  createRateLimitRedis,
-} from '../../../src/platform/rate-limit/redis-rate-limiter.js';
+import { RedisRateLimiter } from '../../../src/platform/rate-limit/redis-rate-limiter.js';
+import { createFailFastRedis } from '../../../src/platform/redis/fail-fast-redis.js';
 import { FakeClock } from '../../support/fake-clock.js';
 import { RecordingLogger } from '../../support/recording-logger.js';
 import { freshPrefix, startRedis } from '../../support/redis-container.js';
@@ -36,7 +34,7 @@ describe('RedisRateLimiter', () => {
   /** One API instance: its own connection, the shared clock and key prefix. */
   const instance = (clock: FakeClock, prefix: string): RedisRateLimiter => {
     const limiter = new RedisRateLimiter({
-      client: createRateLimitRedis({
+      client: createFailFastRedis({
         host: redis.getHost(),
         port: redis.getPort(),
       }),
@@ -83,7 +81,7 @@ describe('RedisRateLimiter', () => {
     // Given a limiter whose Redis does not answer (nothing listens on port 1)
     const logger = new RecordingLogger();
     const unreachable = new RedisRateLimiter({
-      client: createRateLimitRedis({ host: '127.0.0.1', port: 1 }),
+      client: createFailFastRedis({ host: '127.0.0.1', port: 1 }),
       clock: new FakeClock(),
     });
     opened.push(unreachable);
