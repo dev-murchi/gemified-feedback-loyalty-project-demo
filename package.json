@@ -31,7 +31,9 @@
     "test:e2e": "vitest run --project e2e",
     "test:cov": "vitest run --project unit --project contract --coverage",
     "verify": "npm run typecheck && npm run lint && npm run format:check && npm run depcruise && npm run contract:lint && npm run test:cov && npm run test:e2e && npm run test:integration",
-    "demo:snapshot": "tsx scripts/generate-demo-catalog.ts"
+    "demo:snapshot": "tsx scripts/generate-demo-catalog.ts",
+    "start:demo": "nest build && node --env-file=scripts/demo-sim/demo.env dist/main.api.js",
+    "demo-sim": "tsx scripts/demo-sim/server.ts"
   },
   "dependencies": {
     "@nestjs/common": "^12.0.1",

@@ -44,6 +44,57 @@ $ npm run start:dev
 $ npm run start:prod
 ```
 
+## Demo
+
+There is no mobile app yet, so a small simulator (`scripts/demo-sim`, port 3001) hands out what a phone produces by itself: the QR content, the device key id, the attestation, the signatures and `X-Platform-Proof`. It never calls the backend; you send the requests yourself (Postman or curl).
+
+```bash
+# terminal 1: the API on 3000 with the demo catalog (2 brands, 10 branches), in-memory stores,
+# the worker inside the API process and the fake LLM
+npm run start:demo
+
+# terminal 2: the simulator on 3001
+npm run demo-sim
+```
+
+`start:demo` reads `scripts/demo-sim/demo.env`; a variable already set in the shell wins over it.
+
+### Before `start:demo` (optional)
+
+B2B clients need a secret, so they are not in `demo.env`. Set `B2B_DEMO_CLIENTS` in the shell (one client per brand, secrets of at least 32 characters, e.g. from `openssl rand -hex 32`, which has no `+`, `/` or `=`):
+
+```bash
+export B2B_DEMO_CLIENTS='[
+  {"clientId":"fuel-panel","brand":"fuel","secret":"<secret 1>","scope":"b2b.feedback.read b2b.summary.read"},
+  {"clientId":"coffee-panel","brand":"coffee","secret":"<secret 2>","scope":"b2b.feedback.read b2b.summary.read"}
+]'
+```
+
+The default `LLM_DRIVER=fake` labels every comment valid / neutral / topic `other`. For a real analysis set `LLM_DRIVER=openai`, `OPENAI_API_KEY` and `OPENAI_MODEL` in the shell.
+
+### Simulator endpoints
+
+| Request                                                                                       | Returns                                                                                                                                                                                                                                             |
+| --------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /qr`                                                                                     | The QR content (`qrUrl`, `qrToken`) of every branch                                                                                                                                                                                                 |
+| `GET /devices?platform=ios\|android&nonce=…[&deviceId=…][&integrity=fail]`                    | A phone and its `register` and `session` bodies, signed over the nonce. Without `deviceId` a new phone is made; with `integrity=fail` its registration makes a low-trust account (no rewards). Send only one of `register` and `session` per nonce. |
+| `POST /devices/{deviceId}/feedback` (body: the payload you will send to `POST /v1/feedbacks`) | `idempotencyKey` (your `Idempotency-Key` header, or a new UUID) and `xPlatformProof` for exactly that body                                                                                                                                          |
+
+### Postman order
+
+1. `POST :3000/v1/auth/challenge` → `nonce` (single use, 60 seconds: do the next two steps at once).
+2. `GET :3001/devices?platform=ios&nonce=<nonce>` → copy `deviceId` and the `register` body.
+3. `POST :3000/v1/auth/register` with the `register` body → `accessToken`. To sign in again later (the token lasts 15 minutes): a **new** challenge, `GET :3001/devices?platform=ios&deviceId=<id>&nonce=<new nonce>`, `POST :3000/v1/auth/session` with the `session` body.
+4. `GET :3001/qr` → pick a `qrToken`.
+5. Write the feedback body, for example `{"qrToken":"<qrToken>","text":"At least twenty characters of feedback."}`.
+6. `POST :3001/devices/<deviceId>/feedback` with that exact body → `idempotencyKey` and `xPlatformProof`.
+7. `POST :3000/v1/feedbacks` with **the same bytes** as the body and the headers `Authorization: Bearer <accessToken>`, `Idempotency-Key`, `X-Platform-Proof` → `202`, `rewardEligible: true`.
+8. `GET :3000/v1/feedbacks/<feedbackId>` until `status` is no longer `analyzing` (about a second), then `GET :3000/v1/me/wallet`.
+
+**The feedback body must be sent byte for byte as it was signed.** The proof covers the raw bytes and the `Idempotency-Key`: a space, a different key order or a changed character still gets a `202`, but with `rewardEligible: false` and no reward. The same branch again within 24 hours gives `422 REWARD_COOLDOWN`.
+
+Then the brand side (needs `B2B_DEMO_CLIENTS`; in Postman use the body type `x-www-form-urlencoded`, which encodes the values; a raw `+` in a secret would reach the server as a space and give `401 invalid_client`): `POST :3000/v1/b2b/oauth/token` (`application/x-www-form-urlencoded`: `grant_type=client_credentials`, `client_id`, `client_secret`, `scope`) → `GET /v1/b2b/branches` → `GET /v1/b2b/feedbacks?branchId=…` → `GET /v1/b2b/branches/{branchId}/summary`, each with `Authorization: Bearer <access_token>`.
+
 ## Run tests
 
 ```bash

@@ -97,6 +97,18 @@ export class FakeDevice {
     return signer.sign(message, options.rawSignature).toString('base64');
   }
 
+  /** The `POST /v1/auth/session` body (SessionRequest) for either platform. */
+  sessionBody(
+    platform: 'ios' | 'android',
+    nonce: string,
+    options: EvidenceOptions = {},
+  ): Record<string, unknown> {
+    const proof = this.sessionProof(nonce, options);
+    return platform === 'ios'
+      ? { platform, keyId: this.iosKeyId, nonce, assertion: proof }
+      : { platform, keyId: this.androidKeyIdentifier, nonce, signature: proof };
+  }
+
   /**
    * The `X-Platform-Proof` in development mode: a DER signature over
    * SHA-256(Idempotency-Key ‖ raw body), standard base64.
